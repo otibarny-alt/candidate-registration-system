@@ -1,0 +1,17 @@
+<!doctype html><link rel=stylesheet href=/static/style.css><meta name=viewport content="width=device-width,initial-scale=1">
+<div class=top><b>Candidate Registration & Profile Portal</b><span><a href=/candidate/new>Register Candidate</a> · <a href=/logout>Logout</a></span></div>
+<div class=demo>TRAINING / SIMULATION SUPPORT PORTAL</div>
+<div class=wrap><div class=card><div class=headrow><h2>Registered Candidates</h2><a class=btn href=/candidate/new>+ New Candidate</a></div>
+<table><tr><th>Photo</th><th>Candidate</th><th>Position</th><th>Elective Area</th><th>Status</th><th>Actions</th></tr>
+{% for c in candidates %}
+<tr>
+<td>{% if c.photo %}<img class=thumb src="/candidate-photo/{{c.id}}">{% else %}<span class=muted>No photo</span>{% endif %}</td>
+<td><b>{{c.full_name}}</b><br><span class=muted>{{c.candidate_id}}</span></td>
+<td>{{c.position|upper}}</td>
+<td>{% if c.position=="president" %}NATIONAL{% elif c.position in ["governor","senator","woman_rep"] %}{{c.county}}{% elif c.position=="mna" %}{{c.constituency}}, {{c.county}}{% else %}{{c.ward}}, {{c.constituency}}, {{c.county}}{% endif %}</td>
+<td>{{c.status}}</td>
+<td><a href="/candidate/{{c.id}}/edit">Edit</a>
+<form method=post action="/candidate/{{c.id}}/delete" style="display:inline" onsubmit="return confirm('Delete this candidate?')"><button class=linkbtn>Delete</button></form></td>
+</tr>
+{% else %}<tr><td colspan=6>No candidates registered yet.</td></tr>{% endfor %}
+</table></div></div>

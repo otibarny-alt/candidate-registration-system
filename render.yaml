@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: candidate-registration-portal
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app

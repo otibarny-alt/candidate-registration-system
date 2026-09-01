@@ -1,0 +1,57 @@
+<!doctype html><link rel=stylesheet href=/static/style.css><meta name=viewport content="width=device-width,initial-scale=1">
+<div class=top><b>Candidate Registration & Profile Portal</b><a href=/>Back to Candidates</a></div>
+<div class=wrap><div class=card><h2>{{"Edit Candidate" if candidate else "Register Candidate"}}</h2>
+{% if error %}<div class=error>{{error}}</div>{% endif %}
+<form method=post enctype=multipart/form-data id=candidateForm>
+<div class=grid>
+<div><label>Candidate ID</label><input name=candidate_id required value="{{candidate.candidate_id if candidate else ''}}"></div>
+<div><label>Full Name</label><input name=full_name required value="{{candidate.full_name if candidate else ''}}"></div>
+<div><label>National ID</label><input name=national_id value="{{candidate.national_id if candidate else ''}}"></div>
+<div><label>Phone</label><input name=phone value="{{candidate.phone if candidate else ''}}"></div>
+<div><label>Email</label><input name=email value="{{candidate.email if candidate else ''}}"></div>
+<div><label>Membership No.</label><input name=membership_no value="{{candidate.membership_no if candidate else ''}}"></div>
+<div><label>Position Applied For</label>
+<select name=position id=position required>
+<option value="">Select position</option>
+{% for key,label,scope in positions %}<option value="{{key}}" data-scope="{{scope}}" {% if candidate and candidate.position==key %}selected{% endif %}>{{label}}</option>{% endfor %}
+</select></div>
+<div><label>Status</label><select name=status><option value=active {% if not candidate or candidate.status=="active" %}selected{% endif %}>Active</option><option value=inactive {% if candidate and candidate.status=="inactive" %}selected{% endif %}>Inactive</option></select></div>
+<div id=countyBox><label>County</label><select name=county id=county><option value="">Select County</option></select></div>
+<div id=constBox><label>Constituency</label><select name=constituency id=constituency><option value="">Select Constituency</option></select></div>
+<div id=wardBox><label>Ward</label><select name=ward id=ward><option value="">Select Ward</option></select></div>
+<div><label>Candidate Photo</label><input type=file name=photo accept="image/*">{% if candidate and candidate.photo %}<img class=preview src="/candidate-photo/{{candidate.id}}">{% endif %}</div>
+</div>
+<label>Short Biography</label><textarea name=bio rows=7 placeholder="Candidate biography, experience, priorities, etc.">{{candidate.bio if candidate else ''}}</textarea>
+<button>Save Candidate</button>
+</form></div></div>
+
+<script>
+let H=null;
+const county=document.getElementById('county'), constituency=document.getElementById('constituency'), ward=document.getElementById('ward'), position=document.getElementById('position');
+const current={county:{{(candidate.county if candidate else '')|tojson}},constituency:{{(candidate.constituency if candidate else '')|tojson}},ward:{{(candidate.ward if candidate else '')|tojson}}};
+const norm=v=>(v||'').trim().toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
+function fill(el,rows,placeholder,selected){
+ el.innerHTML='<option value="">'+placeholder+'</option>';
+ rows.forEach(r=>{const o=document.createElement('option');o.value=r.name;o.textContent=r.label||r.name;if(norm(r.name)==norm(selected))o.selected=true;el.appendChild(o);});
+}
+function applyScope(){
+ const o=position.selectedOptions[0], scope=o?o.dataset.scope:'';
+ document.getElementById('countyBox').style.display=scope==='national'?'none':'block';
+ document.getElementById('constBox').style.display=['constituency','ward'].includes(scope)?'block':'none';
+ document.getElementById('wardBox').style.display=scope==='ward'?'block':'none';
+}
+position.onchange=applyScope;
+county.onchange=()=>{
+ fill(constituency,H.constituencies.filter(x=>norm(x.county_key)==norm(county.value)),'Select Constituency','');
+ fill(ward,[],'Select Ward','');
+};
+constituency.onchange=()=>{
+ fill(ward,H.wards.filter(x=>norm(x.constituency_key)==norm(constituency.value)),'Select Ward','');
+};
+fetch('/api/hierarchy').then(r=>r.json()).then(d=>{
+ H=d; fill(county,H.counties,'Select County',current.county);
+ if(current.county){fill(constituency,H.constituencies.filter(x=>norm(x.county_key)==norm(current.county)),'Select Constituency',current.constituency);}
+ if(current.constituency){fill(ward,H.wards.filter(x=>norm(x.constituency_key)==norm(current.constituency)),'Select Ward',current.ward);}
+ applyScope();
+});
+</script>
