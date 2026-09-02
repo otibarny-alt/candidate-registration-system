@@ -9,8 +9,12 @@ app=Flask(__name__)
 app.secret_key=os.getenv("FLASK_SECRET_KEY","candidate-portal-change-me")
 
 db_url=os.getenv("DATABASE_URL","sqlite:///candidates.db")
+# Render provides a PostgreSQL URL without an explicit driver.
+# This application installs Psycopg 3, so tell SQLAlchemy to use it.
 if db_url.startswith("postgres://"):
-    db_url="postgresql://"+db_url[len("postgres://"):]
+    db_url="postgresql+psycopg://"+db_url[len("postgres://"):]
+elif db_url.startswith("postgresql://"):
+    db_url="postgresql+psycopg://"+db_url[len("postgresql://"):]
 app.config["SQLALCHEMY_DATABASE_URI"]=db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"]=False
 app.config["MAX_CONTENT_LENGTH"]=6*1024*1024

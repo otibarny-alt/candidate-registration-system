@@ -49,3 +49,11 @@ The app stores candidate photos inside the database, not on the ephemeral Render
 
 TRAINING / SIMULATION ONLY
 This portal is designed to provide candidate profile data to the non-binding training/simulation ballot.
+
+
+V1.1 POSTGRES DRIVER FIX
+------------------------
+Render PostgreSQL URLs normally begin with postgresql:// or postgres://.
+The portal uses Psycopg 3 (package: psycopg[binary]), so app.py now converts
+the Render URL to postgresql+psycopg:// before SQLAlchemy creates the engine.
+This fixes: ModuleNotFoundError: No module named 'psycopg2'
