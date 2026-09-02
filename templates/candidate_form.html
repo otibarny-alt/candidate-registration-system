@@ -4,20 +4,30 @@
 {% if error %}<div class=error>{{error}}</div>{% endif %}
 <form method=post enctype=multipart/form-data id=candidateForm>
 <div class=grid>
+<div><label>National ID</label>
+<div class="lookup-row"><input id="national_id" name=national_id inputmode="numeric" autocomplete="off" required value="{{candidate.national_id if candidate else ''}}"><button type="button" class="lookup-btn" id="lookup_member_btn">Lookup Member</button></div>
+<div id="member_lookup_status" class="lookup-status">{% if candidate %}Member data loaded from saved candidate record.{% else %}Enter the applicant's National ID first to verify membership.{% endif %}</div>
+</div>
+
 <div><label>Candidate ID</label>
 {% if candidate %}
 <input value="{{candidate.candidate_id}}" readonly>
 <small class="muted">System-generated ID — cannot be changed.</small>
 {% else %}
 <input value="Generated automatically when saved" readonly>
-<small class="muted">Do not enter a Candidate ID. The portal will create one automatically.</small>
+<small class="muted">Candidate ID is created automatically after successful member verification and save.</small>
 {% endif %}
 </div>
-<div><label>Full Name</label><input name=full_name required value="{{candidate.full_name if candidate else ''}}"></div>
-<div><label>National ID</label><input name=national_id value="{{candidate.national_id if candidate else ''}}"></div>
-<div><label>Phone</label><input name=phone value="{{candidate.phone if candidate else ''}}"></div>
-<div><label>Email</label><input name=email value="{{candidate.email if candidate else ''}}"></div>
-<div><label>Membership No.</label><input name=membership_no value="{{candidate.membership_no if candidate else ''}}"></div>
+
+<div><label>Full Name</label><input id="full_name" name=full_name readonly required value="{{candidate.full_name if candidate else ''}}">
+<small class="muted">Pulled from Kobo Membership Registration.</small></div>
+
+<div><label>Phone</label><input id="phone" name=phone readonly value="{{candidate.phone if candidate else ''}}"><small class="muted">Pulled from Kobo.</small></div>
+
+<div><label>Email</label><input id="email" name=email readonly value="{{candidate.email if candidate else ''}}"><small class="muted">Pulled from Kobo.</small></div>
+
+<div><label>Membership No.</label><input id="membership_no" name=membership_no readonly value="{{candidate.membership_no if candidate else ''}}"><small class="muted">Pulled from Kobo.</small></div>
+
 <div><label>Position Applied For</label>
 <select name=position id=position required>
 <option value="">Select position</option>
@@ -62,4 +72,84 @@ fetch('/api/hierarchy').then(r=>r.json()).then(d=>{
  if(current.constituency){fill(ward,H.wards.filter(x=>norm(x.constituency_key)==norm(current.constituency)),'Select Ward',current.ward);}
  applyScope();
 });
+
+let memberVerified={{ 'true' if candidate else 'false' }};
+const nationalId=document.getElementById('national_id');
+const lookupBtn=document.getElementById('lookup_member_btn');
+const lookupStatus=document.getElementById('member_lookup_status');
+const fullName=document.getElementById('full_name');
+const phoneField=document.getElementById('phone');
+const emailField=document.getElementById('email');
+const membershipField=document.getElementById('membership_no');
+const candidateForm=document.getElementById('candidateForm');
+
+function clearMemberFields(){
+  fullName.value='';
+  phoneField.value='';
+  emailField.value='';
+  membershipField.value='';
+  memberVerified=false;
+}
+
+async function lookupMember(){
+  const id=(nationalId.value||'').trim();
+  clearMemberFields();
+  if(!id){
+    lookupStatus.className='lookup-status lookup-error';
+    lookupStatus.textContent='Enter a National ID number first.';
+    return;
+  }
+  if(!/^\d+$/.test(id)){
+    lookupStatus.className='lookup-status lookup-error';
+    lookupStatus.textContent='National ID must contain numbers only.';
+    return;
+  }
+
+  lookupBtn.disabled=true;
+  lookupStatus.className='lookup-status lookup-working';
+  lookupStatus.textContent='Checking Kobo Membership Registration…';
+
+  try{
+    const response=await fetch('/api/member-lookup?national_id='+encodeURIComponent(id), {cache:'no-store'});
+    const data=await response.json();
+    if(!response.ok || !data.ok){
+      lookupStatus.className='lookup-status lookup-error';
+      lookupStatus.textContent=data.error || 'Member could not be verified.';
+      return;
+    }
+
+    const m=data.member||{};
+    fullName.value=m.full_name||'';
+    phoneField.value=m.phone||'';
+    emailField.value=m.email||'';
+    membershipField.value=m.membership_no||'';
+    memberVerified=true;
+    lookupStatus.className='lookup-status lookup-success';
+    lookupStatus.textContent='✓ Registered member found in Kobo. Candidate registration may continue.';
+  }catch(e){
+    lookupStatus.className='lookup-status lookup-error';
+    lookupStatus.textContent='Unable to contact the membership lookup service. Please try again.';
+  }finally{
+    lookupBtn.disabled=false;
+  }
+}
+
+lookupBtn.addEventListener('click',lookupMember);
+nationalId.addEventListener('change',lookupMember);
+nationalId.addEventListener('input',()=>{
+  if(memberVerified){
+    clearMemberFields();
+    lookupStatus.className='lookup-status';
+    lookupStatus.textContent='National ID changed. Verify membership again.';
+  }
+});
+candidateForm.addEventListener('submit',e=>{
+  if(!memberVerified){
+    e.preventDefault();
+    lookupStatus.className='lookup-status lookup-error';
+    lookupStatus.textContent='Verify this National ID against Kobo Membership Registration before saving.';
+    lookupStatus.scrollIntoView({behavior:'smooth',block:'center'});
+  }
+});
+
 </script>

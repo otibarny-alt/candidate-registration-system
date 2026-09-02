@@ -1,6 +1,7 @@
 
 import os, csv, re, uuid
 from io import BytesIO
+import requests
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response, abort
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import check_password_hash
@@ -23,6 +24,10 @@ db=SQLAlchemy(app)
 COUNTY_MAIN=os.getenv("COUNTY_MAIN_FILENAME","county_main.csv")
 AUTH_USERNAME=os.getenv("AUTH_USERNAME","admin")
 AUTH_PASSWORD_HASH=os.getenv("AUTH_PASSWORD_HASH","")
+
+KOBO_BASE_URL=os.getenv("KOBO_BASE_URL","https://kf.kobotoolbox.org").rstrip("/")
+MEMBERSHIP_ASSET_UID=os.getenv("MEMBERSHIP_ASSET_UID","").strip()
+KOBO_API_TOKEN=os.getenv("KOBO_API_TOKEN","").strip()
 
 POSITIONS=[
  ("president","President","national"),
@@ -82,6 +87,106 @@ def hierarchy_payload():
 def position_scope(position):
     return dict((k,scope) for k,_,scope in POSITIONS).get(position,"national")
 
+
+def kobo_headers():
+    return {"Authorization": f"Token {KOBO_API_TOKEN}"}
+
+def first_value(row, *keys):
+    for key in keys:
+        value=row.get(key)
+        if value not in (None, ""):
+            return str(value).strip()
+    return ""
+
+def lookup_membership(national_id):
+    """Return the most recent Kobo membership record for a National ID."""
+    if not MEMBERSHIP_ASSET_UID or not KOBO_API_TOKEN:
+        raise RuntimeError("Kobo Membership Registration connection is not configured in Render.")
+
+    url=f"{KOBO_BASE_URL}/api/v2/assets/{MEMBERSHIP_ASSET_UID}/data/"
+    query={"basics/national_id_no": str(national_id).strip()}
+    r=requests.get(
+        url,
+        headers=kobo_headers(),
+        params={"query": __import__("json").dumps(query)},
+        timeout=25
+    )
+    r.raise_for_status()
+    payload=r.json()
+    rows=payload.get("results", payload if isinstance(payload, list) else [])
+    if not rows:
+        return None
+
+    # Prefer the newest submission when duplicates exist.
+    rows=sorted(rows, key=lambda x: str(x.get("_submission_time","")), reverse=True)
+    row=rows[0]
+
+    first=first_value(
+        row,
+        "members_particulars/first_name",
+        "basics/first_name",
+        "first_name"
+    )
+    other=first_value(
+        row,
+        "members_particulars/other_names",
+        "members_particulars/other_name",
+        "basics/other_names",
+        "other_names"
+    )
+    surname=first_value(
+        row,
+        "members_particulars/surname",
+        "members_particulars/last_name",
+        "basics/surname",
+        "surname"
+    )
+    full_name=" ".join(x for x in [first, other, surname] if x).strip()
+    if not full_name:
+        full_name=first_value(
+            row,
+            "members_particulars/full_name",
+            "basics/full_name",
+            "full_name",
+            "name"
+        )
+
+    phone=first_value(
+        row,
+        "basics/phone_no",
+        "basics/phone_number",
+        "members_particulars/phone_no",
+        "members_particulars/phone_number",
+        "phone_no",
+        "phone_number",
+        "phone"
+    )
+    email=first_value(
+        row,
+        "basics/email",
+        "basics/email_address",
+        "members_particulars/email",
+        "members_particulars/email_address",
+        "email",
+        "email_address"
+    )
+    membership_no=first_value(
+        row,
+        "members_particulars/odm_membership_no",
+        "members_particulars/membership_no",
+        "odm_membership_no",
+        "membership_no"
+    )
+
+    return {
+        "national_id": first_value(row, "basics/national_id_no", "national_id_no") or str(national_id).strip(),
+        "full_name": full_name,
+        "phone": phone,
+        "email": email,
+        "membership_no": membership_no,
+        "submission_id": row.get("_id")
+    }
+
 def candidate_dict(c):
     return {
       "id":c.id,
@@ -130,6 +235,38 @@ def dashboard():
 def api_hierarchy():
     return jsonify(hierarchy_payload())
 
+
+@app.get("/api/member-lookup")
+def api_member_lookup():
+    if not logged_in():
+        return jsonify({"ok":False,"error":"Login required."}), 401
+
+    national_id=request.args.get("national_id","").strip()
+    if not national_id:
+        return jsonify({"ok":False,"error":"Enter a National ID number."}), 400
+    if not national_id.isdigit():
+        return jsonify({"ok":False,"error":"National ID must contain numbers only."}), 400
+
+    try:
+        member=lookup_membership(national_id)
+    except requests.RequestException:
+        return jsonify({
+            "ok":False,
+            "error":"Unable to contact Kobo Membership Registration. Please try again."
+        }), 502
+    except RuntimeError as e:
+        return jsonify({"ok":False,"error":str(e)}), 500
+
+    if not member:
+        return jsonify({
+            "ok":False,
+            "not_found":True,
+            "error":"National ID not found in the Membership Registration Project. The applicant must first be registered as a member before candidate registration can continue."
+        }), 404
+
+    return jsonify({"ok":True,"member":member})
+
+
 @app.route("/candidate/new",methods=["GET","POST"])
 def candidate_new():
     r=require_login()
@@ -169,11 +306,31 @@ def save_candidate(c):
         db.session.flush()
         c.candidate_id=f"CAND-{c.id:06d}"
 
-    c.full_name=name
-    c.national_id=f.get("national_id","").strip()
-    c.phone=f.get("phone","").strip()
-    c.email=f.get("email","").strip()
-    c.membership_no=f.get("membership_no","").strip()
+    national_id=f.get("national_id","").strip()
+    if not national_id:
+        return render_template("candidate_form.html",candidate=c,positions=POSITIONS,error="National ID is required and must be verified against Kobo Membership Registration.")
+
+    try:
+        member=lookup_membership(national_id)
+    except requests.RequestException:
+        return render_template("candidate_form.html",candidate=c,positions=POSITIONS,error="Unable to contact Kobo Membership Registration. Candidate was not saved.")
+    except RuntimeError as e:
+        return render_template("candidate_form.html",candidate=c,positions=POSITIONS,error=str(e))
+
+    if not member:
+        return render_template(
+            "candidate_form.html",
+            candidate=c,
+            positions=POSITIONS,
+            error="National ID not found in the Membership Registration Project. The applicant must first be registered as a member."
+        )
+
+    # Membership-controlled fields come from Kobo, not manual data entry.
+    c.full_name=member.get("full_name") or name
+    c.national_id=national_id
+    c.phone=member.get("phone","")
+    c.email=member.get("email","")
+    c.membership_no=member.get("membership_no","")
     c.position=position
     c.bio=f.get("bio","").strip()
     c.status=f.get("status","active").strip() or "active"
