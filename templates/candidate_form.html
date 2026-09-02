@@ -4,7 +4,15 @@
 {% if error %}<div class=error>{{error}}</div>{% endif %}
 <form method=post enctype=multipart/form-data id=candidateForm>
 <div class=grid>
-<div><label>Candidate ID</label><input name=candidate_id required value="{{candidate.candidate_id if candidate else ''}}"></div>
+<div><label>Candidate ID</label>
+{% if candidate %}
+<input value="{{candidate.candidate_id}}" readonly>
+<small class="muted">System-generated ID — cannot be changed.</small>
+{% else %}
+<input value="Generated automatically when saved" readonly>
+<small class="muted">Do not enter a Candidate ID. The portal will create one automatically.</small>
+{% endif %}
+</div>
 <div><label>Full Name</label><input name=full_name required value="{{candidate.full_name if candidate else ''}}"></div>
 <div><label>National ID</label><input name=national_id value="{{candidate.national_id if candidate else ''}}"></div>
 <div><label>Phone</label><input name=phone value="{{candidate.phone if candidate else ''}}"></div>

@@ -1,5 +1,5 @@
 
-import os, csv, re
+import os, csv, re, uuid
 from io import BytesIO
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response, abort
 from flask_sqlalchemy import SQLAlchemy
@@ -151,20 +151,24 @@ def save_candidate(c):
     f=request.form
     position=f.get("position","").strip()
     scope=position_scope(position)
-    cid=f.get("candidate_id","").strip()
     name=f.get("full_name","").strip()
-    if not cid or not name or position not in dict((k,label) for k,label,_ in POSITIONS):
-        return render_template("candidate_form.html",candidate=c,positions=POSITIONS,error="Candidate ID, full name and position are required.")
+    if not name or position not in dict((k,label) for k,label,_ in POSITIONS):
+        return render_template("candidate_form.html",candidate=c,positions=POSITIONS,error="Full name and position are required.")
 
-    existing=Candidate.query.filter_by(candidate_id=cid).first()
-    if existing and (not c or existing.id!=c.id):
-        return render_template("candidate_form.html",candidate=c,positions=POSITIONS,error="Candidate ID already exists.")
-
-    if c is None:
-        c=Candidate(candidate_id=cid,full_name=name,position=position)
+    is_new = c is None
+    if is_new:
+        # Candidate ID is system-generated and never entered by the user.
+        # A temporary unique value satisfies the NOT NULL/UNIQUE constraint
+        # until PostgreSQL assigns the numeric primary key.
+        c=Candidate(
+            candidate_id="PENDING-"+uuid.uuid4().hex,
+            full_name=name,
+            position=position
+        )
         db.session.add(c)
+        db.session.flush()
+        c.candidate_id=f"CAND-{c.id:06d}"
 
-    c.candidate_id=cid
     c.full_name=name
     c.national_id=f.get("national_id","").strip()
     c.phone=f.get("phone","").strip()

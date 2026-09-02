@@ -57,3 +57,20 @@ Render PostgreSQL URLs normally begin with postgresql:// or postgres://.
 The portal uses Psycopg 3 (package: psycopg[binary]), so app.py now converts
 the Render URL to postgresql+psycopg:// before SQLAlchemy creates the engine.
 This fixes: ModuleNotFoundError: No module named 'psycopg2'
+
+
+V1.2 — AUTOMATIC CANDIDATE ID
+-----------------------------
+Candidate ID is no longer entered by the administrator.
+
+For each new candidate the portal automatically creates:
+CAND-000001
+CAND-000002
+CAND-000003
+...
+
+The Candidate ID is generated from the database record ID, remains unique,
+and is read-only on the edit screen. National ID remains a separate candidate
+biographical field and cannot be confused with the internal Candidate ID.
+
+Existing candidate records keep their current Candidate IDs.
