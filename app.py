@@ -187,6 +187,13 @@ def lookup_membership(national_id):
         "submission_id": row.get("_id")
     }
 
+
+def existing_candidate_for_national_id(national_id, exclude_candidate_id=None):
+    q=Candidate.query.filter_by(national_id=str(national_id).strip())
+    if exclude_candidate_id is not None:
+        q=q.filter(Candidate.id != exclude_candidate_id)
+    return q.first()
+
 def candidate_dict(c):
     return {
       "id":c.id,
@@ -264,6 +271,23 @@ def api_member_lookup():
             "error":"National ID not found in the Membership Registration Database. The applicant must first be registered as a member before candidate registration can continue."
         }), 404
 
+    existing=existing_candidate_for_national_id(national_id)
+    if existing:
+        area=(
+            "National" if existing.position=="president"
+            else existing.ward if existing.position=="mca"
+            else existing.constituency if existing.position=="mna"
+            else existing.county
+        )
+        return jsonify({
+            "ok":False,
+            "already_registered":True,
+            "candidate_id":existing.candidate_id,
+            "position":existing.position,
+            "elective_area":area or "",
+            "error":f"This National ID is already registered as candidate {existing.candidate_id} for {existing.position.upper()} in {area or 'the selected electoral area'}. One National ID can submit only one candidate application."
+        }), 409
+
     return jsonify({"ok":True,"member":member})
 
 
@@ -309,6 +333,21 @@ def save_candidate(c):
     national_id=f.get("national_id","").strip()
     if not national_id:
         return render_template("candidate_form.html",candidate=c,positions=POSITIONS,error="National ID is required and must be verified against Kobo Membership Registration.")
+
+    duplicate=existing_candidate_for_national_id(national_id, c.id if c else None)
+    if duplicate:
+        area=(
+            "National" if duplicate.position=="president"
+            else duplicate.ward if duplicate.position=="mca"
+            else duplicate.constituency if duplicate.position=="mna"
+            else duplicate.county
+        )
+        return render_template(
+            "candidate_form.html",
+            candidate=c,
+            positions=POSITIONS,
+            error=f"This National ID is already registered as candidate {duplicate.candidate_id} for {duplicate.position.upper()} in {area or 'the selected electoral area'}. One National ID can submit only one candidate application."
+        )
 
     try:
         member=lookup_membership(national_id)

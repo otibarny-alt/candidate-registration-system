@@ -6,7 +6,7 @@
 <div class=grid>
 <div><label>National ID</label>
 <div class="lookup-row"><input id="national_id" name=national_id inputmode="numeric" autocomplete="off" required value="{{candidate.national_id if candidate else ''}}"><button type="button" class="lookup-btn" id="lookup_member_btn">Lookup Member</button></div>
-<div id="member_lookup_status" class="lookup-status">{% if candidate %}Member data loaded from saved candidate record.{% else %}Enter the applicant's National ID first to verify membership.{% endif %}</div>
+<div id="member_lookup_status" class="lookup-status">{% if candidate %}Member data loaded from saved candidate record.{% else %}Enter the applicant's National ID first. The system will verify membership and confirm that the ID has not already submitted another candidate application.{% endif %}</div>
 </div>
 
 <div><label>Candidate ID</label>
@@ -147,6 +147,13 @@ async function lookupMember(){
     if(!response.ok || !data.ok){
       lookupStatus.className='lookup-status lookup-error';
       lookupStatus.textContent=data.error || 'Member could not be verified.';
+      if(data.already_registered){
+        fullName.value='';
+        phoneField.value='';
+        emailField.value='';
+        membershipField.value='';
+        memberVerified=false;
+      }
       return;
     }
 

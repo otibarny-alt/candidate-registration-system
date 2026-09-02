@@ -165,3 +165,37 @@ V1.8 — MEMBERSHIP NUMBER ON CANDIDATE LIST
 The Registered Candidates table now includes a dedicated Membership No. column.
 The number displayed is the membership number already pulled from Kobo Membership Registration
 when the candidate was verified.
+
+
+V1.10 — ONE NATIONAL ID = ONE CANDIDATE APPLICATION
+----------------------------------------------------
+A National ID can now appear in only one candidate application across the entire portal.
+
+This rule applies regardless of:
+- elective position;
+- county;
+- constituency;
+- ward.
+
+Examples now blocked:
+- the same National ID applying for MCA and later MNA;
+- the same National ID applying in two different wards;
+- the same National ID applying in two different constituencies;
+- the same National ID applying in two different counties.
+
+When National ID lookup is performed, the portal checks:
+1. that the person exists in the Membership Registration Database; and
+2. that the National ID is not already attached to another candidate record.
+
+If already registered, the portal displays the existing Candidate ID, position and elective area
+and blocks the new application.
+
+The same check is repeated server-side during Save, so it cannot be bypassed from the browser.
+
+Editing an existing candidate remains allowed. Editing changes the one existing application rather
+than creating another application for the same National ID.
+
+IMPORTANT FOR EXISTING DATA:
+V1.10 does not automatically delete or merge duplicate records that were already created in older
+versions. Those records remain visible so an administrator can review and correct them safely.
+New duplicates are blocked from V1.10 onward.
