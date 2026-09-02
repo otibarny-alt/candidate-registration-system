@@ -158,3 +158,10 @@ When a photo is selected:
 
 The visible "Cropped photo to be saved" preview is the exact 400 x 500 JPEG sent to the server.
 The JavaScript file is loaded with ?v=17 to reduce browser-cache problems after deployment.
+
+
+V1.8 — MEMBERSHIP NUMBER ON CANDIDATE LIST
+------------------------------------------
+The Registered Candidates table now includes a dedicated Membership No. column.
+The number displayed is the membership number already pulled from Kobo Membership Registration
+when the candidate was verified.
