@@ -356,15 +356,6 @@ def save_candidate(c):
     db.session.commit()
     return redirect(url_for("dashboard"))
 
-@app.post("/candidate/<int:candidate_id>/delete")
-def candidate_delete(candidate_id):
-    r=require_login()
-    if r:return r
-    c=Candidate.query.get_or_404(candidate_id)
-    db.session.delete(c)
-    db.session.commit()
-    return redirect(url_for("dashboard"))
-
 @app.get("/candidate-photo/<int:candidate_id>")
 def candidate_photo(candidate_id):
     c=Candidate.query.get_or_404(candidate_id)

@@ -116,3 +116,13 @@ Workflow:
 4. If found: Full Name, Phone, Email and Membership No. are populated automatically.
 5. If not found: registration is blocked and the portal instructs the applicant to register as a member first.
 6. Candidate ID is still system-generated only after the candidate is saved.
+
+
+V1.5 — CANDIDATE DELETION DISABLED
+----------------------------------
+The Delete link has been removed from the Registered Candidates screen.
+The server-side candidate deletion endpoint has also been removed.
+
+Candidate records can still be corrected using Edit, and status can be changed
+to Inactive where a candidate should no longer be active. This prevents accidental
+permanent deletion of submitted candidate profiles.

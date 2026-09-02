@@ -10,8 +10,7 @@
 <td>{{c.position|upper}}</td>
 <td>{% if c.position=="president" %}NATIONAL{% elif c.position in ["governor","senator","woman_rep"] %}{{c.county}}{% elif c.position=="mna" %}{{c.constituency}}, {{c.county}}{% else %}{{c.ward}}, {{c.constituency}}, {{c.county}}{% endif %}</td>
 <td>{{c.status}}</td>
-<td><a href="/candidate/{{c.id}}/edit">Edit</a>
-<form method=post action="/candidate/{{c.id}}/delete" style="display:inline" onsubmit="return confirm('Delete this candidate?')"><button class=linkbtn>Delete</button></form></td>
+<td><a href="/candidate/{{c.id}}/edit">Edit</a></td>
 </tr>
 {% else %}<tr><td colspan=6>No candidates registered yet.</td></tr>{% endfor %}
 </table></div></div>
