@@ -81,7 +81,7 @@ V1.3 — KOBO MEMBERSHIP LOOKUP GATE
 Candidate registration now begins with National ID membership verification.
 
 When a National ID is entered:
-1. The portal queries the Kobo Membership Registration Project using:
+1. The portal queries the Kobo Membership Registration Database using:
    basics/national_id_no
 2. If a member is found, the portal fills Full Name, Phone, Email and Membership No.
 3. Those membership-controlled fields are read-only in the candidate form.

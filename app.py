@@ -261,7 +261,7 @@ def api_member_lookup():
         return jsonify({
             "ok":False,
             "not_found":True,
-            "error":"National ID not found in the Membership Registration Project. The applicant must first be registered as a member before candidate registration can continue."
+            "error":"National ID not found in the Membership Registration Database. The applicant must first be registered as a member before candidate registration can continue."
         }), 404
 
     return jsonify({"ok":True,"member":member})
@@ -322,7 +322,7 @@ def save_candidate(c):
             "candidate_form.html",
             candidate=c,
             positions=POSITIONS,
-            error="National ID not found in the Membership Registration Project. The applicant must first be registered as a member."
+            error="National ID not found in the Membership Registration Database. The applicant must first be registered as a member."
         )
 
     # Membership-controlled fields come from Kobo, not manual data entry.
