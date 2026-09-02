@@ -1,5 +1,5 @@
 
-import os, csv, re, uuid
+import os, csv, re, uuid, base64
 from io import BytesIO
 import requests
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response, abort
@@ -346,12 +346,16 @@ def save_candidate(c):
     if scope=="ward" and (not c.county or not c.constituency or not c.ward):
         return render_template("candidate_form.html",candidate=c,positions=POSITIONS,error="County, Constituency and Ward are required for MCA.")
 
-    photo=request.files.get("photo")
-    if photo and photo.filename:
-        if not (photo.mimetype or "").startswith("image/"):
-            return render_template("candidate_form.html",candidate=c,positions=POSITIONS,error="Candidate photo must be an image.")
-        c.photo=photo.read()
-        c.photo_mime=photo.mimetype or "image/jpeg"
+    cropped_photo=f.get("cropped_photo","").strip()
+    if cropped_photo:
+        try:
+            header,encoded=cropped_photo.split(",",1)
+            if not header.startswith("data:image/"):
+                raise ValueError("Invalid image data")
+            c.photo=base64.b64decode(encoded)
+            c.photo_mime="image/jpeg"
+        except Exception:
+            return render_template("candidate_form.html",candidate=c,positions=POSITIONS,error="The cropped candidate photo could not be processed. Please select and crop the image again.")
 
     db.session.commit()
     return redirect(url_for("dashboard"))

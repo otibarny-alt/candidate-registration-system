@@ -126,3 +126,35 @@ The server-side candidate deletion endpoint has also been removed.
 Candidate records can still be corrected using Edit, and status can be changed
 to Inactive where a candidate should no longer be active. This prevents accidental
 permanent deletion of submitted candidate profiles.
+
+
+V1.6 — IN-BROWSER PHOTO CROPPER
+-------------------------------
+Candidate photos can now be cropped before saving.
+
+Workflow:
+1. Select candidate photo.
+2. A 4:5 portrait crop frame appears.
+3. Drag the photo to reposition it.
+4. Use the Zoom slider if necessary.
+5. Click Confirm Crop.
+6. The cropped JPEG is saved to the database when the candidate is saved.
+
+The crop is fixed at 400 x 500 pixels (4:5 portrait), giving consistent candidate
+photos for the candidate portal and training/simulation ballot display.
+
+
+V1.7 — RELIABLE PHOTO CROPPER
+-----------------------------
+The cropper has been separated into its own JavaScript file so that any error in the
+membership/hierarchy form script cannot prevent photo cropping.
+
+When a photo is selected:
+- the crop frame opens automatically;
+- the page scrolls to the crop frame;
+- the candidate can drag and zoom the image;
+- "Crop & Use Photo" creates a visible final preview;
+- the form refuses to save a newly selected photo until the crop has been confirmed.
+
+The visible "Cropped photo to be saved" preview is the exact 400 x 500 JPEG sent to the server.
+The JavaScript file is loaded with ?v=17 to reduce browser-cache problems after deployment.

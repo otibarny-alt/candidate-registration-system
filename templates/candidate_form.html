@@ -37,7 +37,39 @@
 <div id=countyBox><label>County</label><select name=county id=county><option value="">Select County</option></select></div>
 <div id=constBox><label>Constituency</label><select name=constituency id=constituency><option value="">Select Constituency</option></select></div>
 <div id=wardBox><label>Ward</label><select name=ward id=ward><option value="">Select Ward</option></select></div>
-<div><label>Candidate Photo</label><input type=file name=photo accept="image/*">{% if candidate and candidate.photo %}<img class=preview src="/candidate-photo/{{candidate.id}}">{% endif %}</div>
+<div class="candidate-photo-field">
+<label>Candidate Photo</label>
+<input type="file" id="photo_input" accept="image/jpeg,image/png,image/webp,image/*">
+<input type="hidden" name="cropped_photo" id="cropped_photo">
+
+<div id="cropper_wrap" class="cropper-wrap" hidden>
+  <h3>Crop Candidate Photo</h3>
+  <p class="muted">Drag the picture inside the frame and use the zoom slider. The area inside the frame is exactly what will be saved.</p>
+  <div class="crop-stage">
+    <canvas id="crop_canvas" width="400" height="500"></canvas>
+  </div>
+  <div class="crop-controls">
+    <label for="crop_zoom">Zoom</label>
+    <input type="range" id="crop_zoom" min="1" max="4" step="0.01" value="1">
+    <button type="button" id="crop_reset_btn" class="secondary-btn">Reset</button>
+    <button type="button" id="crop_confirm_btn">Crop & Use Photo</button>
+  </div>
+  <div id="crop_status" class="lookup-status">Waiting for photo.</div>
+</div>
+
+<div id="cropped_preview_wrap" class="cropped-preview-wrap" hidden>
+  <b>Cropped photo to be saved:</b>
+  <img id="cropped_preview" class="cropped-preview" alt="Cropped candidate photo preview">
+  <div class="lookup-status lookup-success">✓ Crop confirmed. This is the photo that will be stored.</div>
+</div>
+
+{% if candidate and candidate.photo %}
+<div class="existing-photo-wrap">
+  <span class="muted">Current saved photo:</span>
+  <img class="preview" src="/candidate-photo/{{candidate.id}}">
+</div>
+{% endif %}
+</div>
 </div>
 <label>Short Biography</label><textarea name=bio rows=7 placeholder="Candidate biography, experience, priorities, etc.">{{candidate.bio if candidate else ''}}</textarea>
 <button>Save Candidate</button>
@@ -152,4 +184,7 @@ candidateForm.addEventListener('submit',e=>{
   }
 });
 
+
+
 </script>
+<script src="/static/photo_cropper.js?v=17"></script>
