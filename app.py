@@ -1,5 +1,5 @@
 
-# V1.15.3: remove candidate-list navigation from registration form header.
+# V1.16: database-backed final candidate-list lock with Level 2 unlock.
 import os, csv, re, uuid, base64, hmac, time
 from io import BytesIO
 import requests
@@ -27,6 +27,8 @@ db=SQLAlchemy(app)
 COUNTY_MAIN=os.getenv("COUNTY_MAIN_FILENAME","county_main.csv")
 AUTH_USERNAME=os.getenv("AUTH_USERNAME","admin")
 AUTH_PASSWORD_HASH=os.getenv("AUTH_PASSWORD_HASH","")
+LEVEL2_ADMIN_USERNAME=os.getenv("LEVEL2_ADMIN_USERNAME","").strip()
+LEVEL2_ADMIN_PASSWORD_HASH=os.getenv("LEVEL2_ADMIN_PASSWORD_HASH","").strip()
 _CANDIDATE_LOGIN_ATTEMPTS={}
 
 KOBO_BASE_URL=os.getenv("KOBO_BASE_URL","https://kf.kobotoolbox.org").rstrip("/")
@@ -64,6 +66,12 @@ class Candidate(db.Model):
     status=db.Column(db.String(20),default="active",nullable=False,index=True)
     approval_status=db.Column(db.String(20),default="pending",nullable=False,index=True)
 
+class PortalState(db.Model):
+    id=db.Column(db.Integer,primary_key=True)
+    candidate_list_final=db.Column(db.Boolean,default=False,nullable=False)
+    locked_at=db.Column(db.String(40))
+    locked_by=db.Column(db.String(100))
+
 with app.app_context():
     db.create_all()
     # create_all() does not add columns to an existing Render PostgreSQL table.
@@ -76,6 +84,8 @@ with app.app_context():
         db.session.execute(text("ALTER TABLE candidate ADD COLUMN payment_evidence_mime VARCHAR(80)"))
     if "approval_status" not in candidate_columns:
         db.session.execute(text("ALTER TABLE candidate ADD COLUMN approval_status VARCHAR(20) NOT NULL DEFAULT 'pending'"))
+    if db.session.get(PortalState,1) is None:
+        db.session.add(PortalState(id=1,candidate_list_final=False))
     db.session.commit()
 
 def logged_in():
@@ -88,6 +98,29 @@ def require_login():
     if not logged_in():
         return redirect(url_for("login"))
     return None
+
+def portal_state():
+    state=db.session.get(PortalState,1)
+    if state is None:
+        state=PortalState(id=1,candidate_list_final=False)
+        db.session.add(state)
+        db.session.commit()
+    return state
+
+def candidate_list_is_final():
+    return bool(portal_state().candidate_list_final)
+
+def admin_csrf_token():
+    token=session.get("admin_csrf_token")
+    if not token:
+        token=uuid.uuid4().hex
+        session["admin_csrf_token"]=token
+    return token
+
+def valid_admin_csrf():
+    supplied=request.form.get("csrf_token","")
+    expected=session.get("admin_csrf_token","")
+    return bool(supplied and expected and hmac.compare_digest(supplied,expected))
 
 def candidate_session_national_id():
     return str(session.get("candidate_national_id") or "").strip()
@@ -365,6 +398,7 @@ def render_candidate_form_page(candidate=None, **context):
         positions=POSITIONS,
         self_service=self_service,
         verified_member=verified_member,
+        list_locked=candidate_list_is_final(),
         **context
     )
 
@@ -437,17 +471,75 @@ def dashboard():
             return redirect(url_for("candidate_home"))
         return redirect(url_for("candidate_access"))
     candidates=Candidate.query.order_by(Candidate.position,Candidate.county,Candidate.constituency,Candidate.ward,Candidate.full_name).all()
-    return render_template("dashboard.html",candidates=candidates,positions=POSITIONS)
+    state=portal_state()
+    return render_template(
+        "dashboard.html",candidates=candidates,positions=POSITIONS,state=state,
+        csrf_token=admin_csrf_token(),level2_configured=bool(LEVEL2_ADMIN_USERNAME and LEVEL2_ADMIN_PASSWORD_HASH),
+        message=session.pop("candidate_admin_message",None),
+        error=session.pop("candidate_admin_error",None)
+    )
+
+@app.post("/admin/candidate-list/finalize")
+def finalize_candidate_list():
+    auth=require_login()
+    if auth:
+        return auth
+    if not valid_admin_csrf():
+        abort(400)
+    if not LEVEL2_ADMIN_USERNAME or not LEVEL2_ADMIN_PASSWORD_HASH:
+        session["candidate_admin_error"]="Configure the Level 2 administrator credentials before marking the candidate list Final."
+        return redirect(url_for("dashboard"))
+    state=portal_state()
+    if not state.candidate_list_final:
+        state.candidate_list_final=True
+        state.locked_at=time.strftime("%Y-%m-%d %H:%M:%S UTC",time.gmtime())
+        state.locked_by=AUTH_USERNAME
+        db.session.commit()
+    session["candidate_admin_message"]="Candidate list marked FINAL. All registration and application changes are locked."
+    return redirect(url_for("dashboard"))
+
+@app.post("/admin/candidate-list/unlock")
+def unlock_candidate_list():
+    auth=require_login()
+    if auth:
+        return auth
+    if not valid_admin_csrf():
+        abort(400)
+    username=request.form.get("level2_username","").strip()
+    password=request.form.get("level2_password","")
+    username_ok=bool(LEVEL2_ADMIN_USERNAME) and hmac.compare_digest(username,LEVEL2_ADMIN_USERNAME)
+    try:
+        password_ok=bool(LEVEL2_ADMIN_PASSWORD_HASH) and check_password_hash(LEVEL2_ADMIN_PASSWORD_HASH,password)
+    except (ValueError,TypeError):
+        password_ok=False
+    if not username_ok or not password_ok:
+        session["candidate_admin_error"]="Level 2 administrator credentials were not accepted. The candidate list remains Final and locked."
+        return redirect(url_for("dashboard"))
+    state=portal_state()
+    state.candidate_list_final=False
+    state.locked_at=None
+    state.locked_by=None
+    db.session.commit()
+    session["candidate_admin_message"]="Level 2 administrator unlocked the candidate list. Editing is available again."
+    return redirect(url_for("dashboard"))
 
 @app.post("/candidate/<int:candidate_id>/decision")
 def candidate_decision(candidate_id):
     auth=require_login()
     if auth:
         return auth
+    if not valid_admin_csrf():
+        abort(400)
+    if candidate_list_is_final():
+        session["candidate_admin_error"]="The candidate list is FINAL. Application decisions cannot be changed until a Level 2 administrator unlocks it."
+        return redirect(url_for("dashboard"))
     c=Candidate.query.get_or_404(candidate_id)
     decision=request.form.get("approval_status","").strip().lower()
     if decision not in {"pending","approved","rejected"}:
         abort(400)
+    if candidate_list_is_final():
+        session["candidate_admin_error"]="The candidate list became FINAL. The application decision was not changed."
+        return redirect(url_for("dashboard"))
     c.approval_status=decision
     db.session.commit()
     return redirect(url_for("dashboard"))
@@ -515,6 +607,11 @@ def candidate_new():
         existing=existing_candidate_for_national_id(candidate_session_national_id())
         if existing:
             return redirect(url_for("candidate_edit",candidate_id=existing.id))
+    if candidate_list_is_final():
+        if logged_in():
+            session["candidate_admin_error"]="The candidate list is FINAL. New registrations are locked."
+            return redirect(url_for("dashboard"))
+        return render_template("candidate_list_final.html"),423
     if request.method=="GET":
         return render_candidate_form_page()
     return save_candidate(None)
@@ -531,6 +628,8 @@ def candidate_edit(candidate_id):
     return save_candidate(c)
 
 def save_candidate(c):
+    if candidate_list_is_final():
+        return render_candidate_form_page(c,error="The candidate list is FINAL. No application changes are permitted until a Level 2 administrator unlocks it."),423
     f=request.form
     position=f.get("position","").strip()
     scope=position_scope(position)
@@ -636,6 +735,9 @@ def save_candidate(c):
     elif not c.payment_evidence:
         return render_candidate_form_page(c,error="Payment Evidence is required. Upload a clear JPG, PNG or WebP image before saving the candidate.")
 
+    if candidate_list_is_final():
+        db.session.rollback()
+        return render_candidate_form_page(c,error="The candidate list became FINAL while this form was open. Your changes were not saved."),423
     db.session.commit()
     if logged_in():
         return redirect(url_for("dashboard"))

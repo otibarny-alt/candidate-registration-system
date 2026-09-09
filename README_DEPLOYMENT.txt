@@ -284,3 +284,13 @@ V1.15.3 — REGISTRATION HEADER PRIVACY
 
 - Removes the Back to Candidates link from the candidate registration and edit page header.
 - Candidate-list access remains available only through protected administrator navigation.
+
+V1.16 — FINAL CANDIDATE LIST CENTRAL LOCK
+----------------------------------------
+
+- An authenticated administrator can mark the complete candidate list Final.
+- Final status is stored in PostgreSQL and therefore survives restarts and deployments.
+- While Final, new registrations, candidate edits, record-status changes and application-decision changes are blocked both in the interface and on the server.
+- Approved, active candidates remain available to ballot feeds while the list is locked.
+- Only valid Level 2 credentials can unlock the list.
+- The system refuses to finalize unless LEVEL2_ADMIN_USERNAME and LEVEL2_ADMIN_PASSWORD_HASH are configured.

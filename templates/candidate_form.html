@@ -2,11 +2,12 @@
 <div class=top><b>Candidate Registration & Profile Portal</b>{% if self_service %}<a href=/candidate/logout>Candidate Logout</a>{% endif %}</div>
 <div class=wrap><div class=card><h2>{{"Edit Candidate" if candidate else "Register Candidate"}}</h2>
 {% if self_service %}<div class="privacy-notice"><b>Private application:</b> You are viewing only your own candidate information.</div>{% endif %}
+{% if list_locked %}<div class="central-lock central-lock-final"><h3>🔒 FINAL CANDIDATE LIST — EDITING LOCKED</h3><p>This application is available for viewing only. No changes can be saved unless a Level 2 administrator unlocks the candidate list.</p></div>{% endif %}
 {% if self_service and candidate %}<div class="decision-notice decision-{{candidate.approval_status or 'pending'}}"><b>Application decision:</b> {{(candidate.approval_status or 'pending')|upper}}{% if (candidate.approval_status or 'pending') == 'pending' %} — your application is awaiting administrator review and is not yet included on the ballot.{% elif candidate.approval_status == 'approved' %} — your application is approved for inclusion on the ballot.{% else %} — your application is not included on the ballot.{% endif %}</div>{% endif %}
 {% if self_service and verified_member.geography_verified %}<div class="eligibility-notice"><b>Your verified voter area:</b> {{verified_member.county|replace('_',' ')|title}} · {{verified_member.constituency|replace('_',' ')|title}} · {{verified_member.ward|replace('_',' ')|title}}{% if verified_member.polling_station %}<br><b>Polling station:</b> {{verified_member.polling_station|replace('_',' ')|title}}{% endif %}<br><span>Governor, Senator and Woman Representative applications are restricted to this county; MNA to this constituency; and MCA to this ward. President is national.</span></div>{% elif self_service %}<div class="error">Your voter area could not be refreshed. Please log out and sign in again before editing a non-presidential application.</div>{% endif %}
 {% if saved %}<div class="success">Your candidate application has been saved successfully. You may review and correct your information on this page.</div>{% endif %}
 {% if error %}<div class=error>{{error}}</div>{% endif %}
-<form method=post enctype=multipart/form-data id=candidateForm>
+<form method=post enctype=multipart/form-data id=candidateForm><fieldset class="form-lock-fieldset" {% if list_locked %}disabled{% endif %}>
 <div class=grid>
 <div><label>National ID</label>
 <div class="lookup-row"><input id="national_id" name=national_id inputmode="numeric" autocomplete="off" required {% if self_service %}readonly{% endif %} value="{{candidate.national_id if candidate else (verified_member.national_id if verified_member else '')}}">{% if not self_service %}<button type="button" class="lookup-btn" id="lookup_member_btn">Lookup Member</button>{% endif %}</div>
@@ -89,11 +90,11 @@
 {% endif %}
 </div>
 <label>Short Biography</label><textarea name=bio rows=7 placeholder="Candidate biography, experience, priorities, etc.">{{candidate.bio if candidate else ''}}</textarea>
-<div class="form-actions">
+{% if not list_locked %}<div class="form-actions">
   <button type="submit">Save Candidate</button>
   <a class="btn cancel-edit-btn" href="{{ url_for('candidate_home') if self_service else url_for('dashboard') }}">Cancel Edit</a>
-</div>
-</form></div></div>
+</div>{% endif %}
+</fieldset></form></div></div>
 
 <script>
 let H=null;

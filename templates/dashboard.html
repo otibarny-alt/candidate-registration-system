@@ -1,7 +1,33 @@
 <!doctype html><link rel=stylesheet href=/static/style.css><meta name=viewport content="width=device-width,initial-scale=1">
-<div class=top><b>Candidate Registration & Profile Portal</b><span><a href=/candidate/new>Register Candidate</a> · <a href=/logout>Logout</a></span></div>
+<div class=top><b>Candidate Registration & Profile Portal</b><span>{% if not state.candidate_list_final %}<a href=/candidate/new>Register Candidate</a> · {% endif %}<a href=/logout>Logout</a></span></div>
 <div class=demo>TRAINING / SIMULATION SUPPORT PORTAL</div>
-<div class=wrap><div class=card><div class=headrow><h2>Registered Candidates</h2><a class=btn href=/candidate/new>+ New Candidate</a></div>
+<div class=wrap><div class=card><div class=headrow><h2>Registered Candidates</h2>{% if not state.candidate_list_final %}<a class=btn href=/candidate/new>+ New Candidate</a>{% endif %}</div>
+{% if message %}<div class=success>{{message}}</div>{% endif %}
+{% if error %}<div class=error>{{error}}</div>{% endif %}
+{% if state.candidate_list_final %}
+<section class="central-lock central-lock-final">
+ <h3>🔒 FINAL CANDIDATE LIST — ALL EDITING LOCKED</h3>
+ <p>No new registration, candidate edit, record-status change or application-decision change is permitted.</p>
+ {% if state.locked_at %}<p class="lock-meta">Locked by {{state.locked_by or 'Administrator'}} on {{state.locked_at}}.</p>{% endif %}
+ <form method="post" action="{{url_for('unlock_candidate_list')}}" class="unlock-form">
+  <input type="hidden" name="csrf_token" value="{{csrf_token}}">
+  <div><label>Level 2 Administrator Username</label><input name="level2_username" autocomplete="username" required></div>
+  <div><label>Level 2 Administrator Password</label><input name="level2_password" type="password" autocomplete="current-password" required></div>
+  <button type="submit" onclick="return confirm('Unlock the FINAL candidate list and permit editing again?');">Level 2 Unlock</button>
+ </form>
+</section>
+{% else %}
+<section class="central-lock central-lock-open">
+ <h3>🔓 Candidate List Open for Editing</h3>
+ <p>After all applications and decisions are complete, mark the list Final to stop every further change.</p>
+ {% if level2_configured %}
+ <form method="post" action="{{url_for('finalize_candidate_list')}}">
+  <input type="hidden" name="csrf_token" value="{{csrf_token}}">
+  <button class="finalize-list-btn" type="submit" onclick="return confirm('Mark this candidate list FINAL? All registration and editing will be locked, and only a Level 2 administrator can unlock it.');">Mark Candidate List FINAL &amp; Lock</button>
+ </form>
+ {% else %}<div class="data-warning">Set <code>LEVEL2_ADMIN_USERNAME</code> and <code>LEVEL2_ADMIN_PASSWORD_HASH</code> before the list can be marked Final.</div>{% endif %}
+</section>
+{% endif %}
 <table><tr><th>Photo</th><th>Candidate</th><th>Membership No.</th><th>Position</th><th>Elective Area</th><th>Payment Evidence</th><th>Record Status</th><th>Actions</th><th>Application Decision</th></tr>
 {% for c in candidates %}
 <tr>
@@ -12,8 +38,8 @@
 <td>{% if c.position=="president" %}NATIONAL{% elif c.position in ["governor","senator","woman_rep"] %}{{c.county}}{% elif c.position=="mna" %}{{c.constituency}}, {{c.county}}{% else %}{{c.ward}}, {{c.constituency}}, {{c.county}}{% endif %}</td>
 <td>{% if c.payment_evidence %}<a href="/payment-evidence/{{c.id}}" target="_blank" rel="noopener">View Image</a>{% else %}<span class=muted>Not uploaded</span>{% endif %}</td>
 <td>{{c.status}}</td>
-<td><a href="/candidate/{{c.id}}/edit">Edit</a></td>
-<td><form method="post" action="/candidate/{{c.id}}/decision" class="decision-form decision-state-{{c.approval_status or 'pending'}}"><select name="approval_status" data-saved-value="{{c.approval_status or 'pending'}}" aria-label="Application decision for {{c.full_name}}"><option value="pending" {% if (c.approval_status or 'pending')=='pending' %}selected{% endif %}>Pending</option><option value="approved" {% if c.approval_status=='approved' %}selected{% endif %}>Accepted</option><option value="rejected" {% if c.approval_status=='rejected' %}selected{% endif %}>Rejected</option></select><button type="submit" class="decision-update-saved" disabled>✓ Updated</button></form></td>
+<td>{% if state.candidate_list_final %}<span class="locked-cell">🔒 Locked</span>{% else %}<a href="/candidate/{{c.id}}/edit">Edit</a>{% endif %}</td>
+<td>{% if state.candidate_list_final %}<span class="decision-badge decision-badge-{{c.approval_status or 'pending'}}">{% if c.approval_status=='approved' %}Accepted{% elif c.approval_status=='rejected' %}Rejected{% else %}Pending{% endif %}</span>{% else %}<form method="post" action="/candidate/{{c.id}}/decision" class="decision-form decision-state-{{c.approval_status or 'pending'}}"><input type="hidden" name="csrf_token" value="{{csrf_token}}"><select name="approval_status" data-saved-value="{{c.approval_status or 'pending'}}" aria-label="Application decision for {{c.full_name}}"><option value="pending" {% if (c.approval_status or 'pending')=='pending' %}selected{% endif %}>Pending</option><option value="approved" {% if c.approval_status=='approved' %}selected{% endif %}>Accepted</option><option value="rejected" {% if c.approval_status=='rejected' %}selected{% endif %}>Rejected</option></select><button type="submit" class="decision-update-saved" disabled>✓ Updated</button></form>{% endif %}</td>
 </tr>
 {% else %}<tr><td colspan=9>No candidates registered yet.</td></tr>{% endfor %}
 </table></div></div>
