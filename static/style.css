@@ -46,6 +46,9 @@ input[readonly]{background:#f1f3f5}
 .decision-form{display:flex;gap:6px;align-items:center;min-width:210px}
 .decision-form select{min-width:120px}
 .decision-form button{margin:0;padding:9px 12px}
+.decision-state-pending select,.decision-state-pending button{background:#f58220;color:#111;border:1px solid #c95e00;font-weight:700}
+.decision-state-approved select,.decision-state-approved button{background:#218838;color:#fff;border:1px solid #176b2a;font-weight:700}
+.decision-state-rejected select,.decision-state-rejected button{background:#c82333;color:#fff;border:1px solid #941b27;font-weight:700}
 .decision-notice{padding:12px;border-radius:8px;margin-bottom:12px;font-weight:700}
 .decision-pending{background:#fff4cf;border:1px solid #d7a51e;color:#674a00}
 .decision-approved{background:#e6f6ea;border:1px solid #72b783;color:#175c29}

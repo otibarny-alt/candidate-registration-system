@@ -1,5 +1,5 @@
 
-# V1.15: administrator application decisions and approved-only ballot feeds.
+# V1.15.1: colour-coded application decisions in the final dashboard column.
 import os, csv, re, uuid, base64, hmac, time
 from io import BytesIO
 import requests

@@ -263,3 +263,10 @@ V1.15 — ADMINISTRATOR APPLICATION DECISIONS
 - Candidate users can see their current decision but cannot alter it.
 - Both public candidate API routes return only candidates whose records are Active and whose applications are Approved.
 - Administrators can update decisions directly from the registered-candidates list or from the candidate edit page.
+
+V1.15.1 — APPLICATION DECISION DISPLAY
+--------------------------------------
+
+- Moves Application Decision to the final column of the administrator candidate list.
+- Displays Pending in orange, Accepted in green and Rejected in red.
+- Updates the colour immediately when an administrator changes the selection.
