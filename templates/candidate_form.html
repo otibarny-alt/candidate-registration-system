@@ -173,7 +173,7 @@ async function lookupMember(){
 
   lookupBtn.disabled=true;
   lookupStatus.className='lookup-status lookup-working';
-  lookupStatus.textContent='Checking Kobo Membership Registration…';
+  lookupStatus.textContent='Checking Kobo and the membership fallback register…';
 
   try{
     const response=await fetch('/api/member-lookup?national_id='+encodeURIComponent(id), {cache:'no-store'});
@@ -198,7 +198,7 @@ async function lookupMember(){
     membershipField.value=m.membership_no||'';
     memberVerified=true;
     lookupStatus.className='lookup-status lookup-success';
-    lookupStatus.textContent='✓ Registered member found in Kobo. Candidate registration may continue.';
+    lookupStatus.textContent='✓ Registered member found. Candidate registration may continue.';
   }catch(e){
     lookupStatus.className='lookup-status lookup-error';
     lookupStatus.textContent='Unable to contact the membership lookup service. Please try again.';

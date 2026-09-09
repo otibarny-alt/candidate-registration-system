@@ -1,7 +1,7 @@
 
 # V1.16.1: require candidate photo and payment evidence before acceptance.
-import os, csv, re, uuid, base64, hmac, time
-from io import BytesIO
+import os, csv, re, uuid, base64, hmac, time, json
+from io import BytesIO, StringIO
 import requests
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response, abort
 from flask_sqlalchemy import SQLAlchemy
@@ -34,6 +34,9 @@ _CANDIDATE_LOGIN_ATTEMPTS={}
 KOBO_BASE_URL=os.getenv("KOBO_BASE_URL","https://kf.kobotoolbox.org").rstrip("/")
 MEMBERSHIP_ASSET_UID=os.getenv("MEMBERSHIP_ASSET_UID","").strip()
 KOBO_API_TOKEN=os.getenv("KOBO_API_TOKEN","").strip()
+MEMBERSHIP_CSV_FILENAME=os.getenv("MEMBERSHIP_CSV_FILENAME","membership_registration.csv").strip()
+MEMBERSHIP_CSV_CACHE_SECONDS=int(os.getenv("MEMBERSHIP_CSV_CACHE_SECONDS","300") or 300)
+_MEMBERSHIP_CSV_CACHE={"loaded_at":0.0,"rows":{}}
 
 POSITIONS=[
  ("president","President","national"),
@@ -252,8 +255,8 @@ def first_value(row, *keys):
             return str(value).strip()
     return ""
 
-def lookup_membership(national_id):
-    """Return the most recent Kobo membership record for a National ID."""
+def _lookup_membership_kobo(national_id):
+    """Return the most recent live Kobo membership record for a National ID."""
     if not MEMBERSHIP_ASSET_UID or not KOBO_API_TOKEN:
         raise RuntimeError("Kobo Membership Registration connection is not configured in Render.")
 
@@ -342,6 +345,85 @@ def lookup_membership(national_id):
         "submission_id": row.get("_id"),
         **geography
     }
+
+def _kobo_media_files():
+    results=[]
+    url=f"{KOBO_BASE_URL}/api/v2/assets/{MEMBERSHIP_ASSET_UID}/files/"
+    while url:
+        response=requests.get(url,headers=kobo_headers(),timeout=30)
+        response.raise_for_status()
+        payload=response.json()
+        results.extend(payload.get("results",[]))
+        url=payload.get("next")
+    return results
+
+def _load_membership_csv():
+    now=time.time()
+    if _MEMBERSHIP_CSV_CACHE["rows"] and now-_MEMBERSHIP_CSV_CACHE["loaded_at"]<MEMBERSHIP_CSV_CACHE_SECONDS:
+        return _MEMBERSHIP_CSV_CACHE["rows"]
+    content=None
+    media_error=None
+    if MEMBERSHIP_ASSET_UID and KOBO_API_TOKEN:
+        try:
+            for item in _kobo_media_files():
+                filename=str((item.get("metadata") or {}).get("filename") or "").strip()
+                if filename.lower()==MEMBERSHIP_CSV_FILENAME.lower() and item.get("content"):
+                    response=requests.get(item["content"],headers=kobo_headers(),timeout=60)
+                    response.raise_for_status()
+                    content=response.content
+                    break
+        except Exception as exc:
+            media_error=exc
+    if content is None:
+        local_path=os.path.join(app.root_path,MEMBERSHIP_CSV_FILENAME)
+        if os.path.isfile(local_path):
+            with open(local_path,"rb") as source:
+                content=source.read()
+        elif media_error:
+            raise RuntimeError(f"Unable to load {MEMBERSHIP_CSV_FILENAME} from Kobo media: {media_error}")
+        else:
+            return {}
+    rows={}
+    for raw in csv.DictReader(StringIO(content.decode("utf-8-sig",errors="replace"))):
+        row={str(k or "").strip():("" if v is None else str(v).strip()) for k,v in raw.items()}
+        national_id=re.sub(r"\D","",row.get("national_id_no",""))
+        if national_id:
+            rows[national_id]=row
+    _MEMBERSHIP_CSV_CACHE.update(loaded_at=now,rows=rows)
+    return rows
+
+def _membership_from_csv(national_id):
+    row=_load_membership_csv().get(re.sub(r"\D","",str(national_id or "")))
+    if not row:
+        return None
+    geography=voter_geography_from_membership(row)
+    return {
+        "national_id":row.get("national_id_no",""),
+        "full_name":" ".join(filter(None,[row.get("first_name"),row.get("middle_name"),row.get("surname")])).strip(),
+        "phone":row.get("phone_no",""),
+        "email":row.get("email",""),
+        "membership_no":row.get("odm_membership_no",""),
+        "submission_id":"membership-csv:"+row.get("national_id_no",""),
+        "membership_source":MEMBERSHIP_CSV_FILENAME,
+        **geography,
+    }
+
+def lookup_membership(national_id):
+    """Prefer live Kobo; use its media CSV before declaring an ID unregistered."""
+    live_error=None
+    try:
+        member=_lookup_membership_kobo(national_id)
+        if member:
+            member["membership_source"]="kobo_submission"
+            return member
+    except Exception as exc:
+        live_error=exc
+    member=_membership_from_csv(national_id)
+    if member:
+        return member
+    if live_error:
+        raise live_error
+    return None
 
 
 def existing_candidate_for_national_id(national_id, exclude_candidate_id=None):
@@ -437,7 +519,7 @@ def candidate_access():
     try:
         member=lookup_membership(national_id)
     except requests.RequestException:
-        return render_template("candidate_access.html",error="Unable to contact Kobo Membership Registration. Please try again."),502
+        return render_template("candidate_access.html",error="Unable to contact the membership lookup sources. Please try again."),502
     except RuntimeError as exc:
         return render_template("candidate_access.html",error=str(exc)),500
     registered_phone=phone_key((member or {}).get("phone",""))
@@ -575,7 +657,7 @@ def api_member_lookup():
     except requests.RequestException:
         return jsonify({
             "ok":False,
-            "error":"Unable to contact Kobo Membership Registration. Please try again."
+            "error":"Unable to contact the membership lookup sources. Please try again."
         }), 502
     except RuntimeError as e:
         return jsonify({"ok":False,"error":str(e)}), 500
@@ -584,7 +666,7 @@ def api_member_lookup():
         return jsonify({
             "ok":False,
             "not_found":True,
-            "error":"National ID not found in the Membership Registration Database. The applicant must first be registered as a member before candidate registration can continue."
+            "error":"National ID not found in Kobo submissions or membership_registration.csv. The applicant must first be registered as a member before candidate registration can continue."
         }), 404
 
     existing=existing_candidate_for_national_id(national_id)
@@ -681,14 +763,14 @@ def save_candidate(c):
     try:
         member=lookup_membership(national_id)
     except requests.RequestException:
-        return render_candidate_form_page(c,error="Unable to contact Kobo Membership Registration. Candidate was not saved.")
+        return render_candidate_form_page(c,error="Unable to contact the membership lookup sources. Candidate was not saved.")
     except RuntimeError as e:
         return render_candidate_form_page(c,error=str(e))
 
     if not member:
         return render_candidate_form_page(
             c,
-            error="National ID not found in the Membership Registration Database. The applicant must first be registered as a member."
+            error="National ID not found in Kobo submissions or membership_registration.csv. The applicant must first be registered as a member."
         )
 
     # Membership-controlled fields come from Kobo, not manual data entry.

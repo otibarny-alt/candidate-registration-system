@@ -302,3 +302,14 @@ V1.16.1 — REQUIRED APPLICATION IMAGES
 - Administrators cannot mark an incomplete application Accepted.
 - Approved-only ballot feeds independently require both stored images.
 - Accepted legacy records missing either image are returned to Pending during deployment for completion and fresh review.
+V1.17 — KOBO MEDIA MEMBERSHIP FALLBACK
+
+Candidate identity lookup now checks live Kobo submissions first and then
+membership_registration.csv in the Membership Registration project's Kobo media.
+An applicant is treated as unregistered only after both sources return no match.
+CSV matches supply the member name, phone, email, membership number, county,
+constituency, ward and polling station used by the existing application restrictions.
+
+Optional Render variables:
+MEMBERSHIP_CSV_FILENAME=membership_registration.csv
+MEMBERSHIP_CSV_CACHE_SECONDS=300
