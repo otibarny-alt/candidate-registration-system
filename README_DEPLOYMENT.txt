@@ -294,3 +294,11 @@ V1.16 — FINAL CANDIDATE LIST CENTRAL LOCK
 - Approved, active candidates remain available to ballot feeds while the list is locked.
 - Only valid Level 2 credentials can unlock the list.
 - The system refuses to finalize unless LEVEL2_ADMIN_USERNAME and LEVEL2_ADMIN_PASSWORD_HASH are configured.
+
+V1.16.1 — REQUIRED APPLICATION IMAGES
+-------------------------------------
+
+- Candidate applications cannot be saved without both a confirmed candidate photo and validated payment-evidence image.
+- Administrators cannot mark an incomplete application Accepted.
+- Approved-only ballot feeds independently require both stored images.
+- Accepted legacy records missing either image are returned to Pending during deployment for completion and fresh review.

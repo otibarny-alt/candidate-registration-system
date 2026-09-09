@@ -45,7 +45,8 @@
 <div id=wardBox><label>Ward</label><select name=ward id=ward><option value="">Select Ward</option></select></div>
 <div class="candidate-photo-field">
 <label>Candidate Photo</label>
-<input type="file" id="photo_input" accept="image/jpeg,image/png,image/webp,image/*">
+<input type="file" id="photo_input" accept="image/jpeg,image/png,image/webp,image/*" {% if not candidate or not candidate.photo %}required{% endif %}>
+<small class="muted">Required. Select an image, crop it and click “Crop &amp; Use Photo” before saving.</small>
 <input type="hidden" name="cropped_photo" id="cropped_photo">
 
 <div id="cropper_wrap" class="cropper-wrap" hidden>

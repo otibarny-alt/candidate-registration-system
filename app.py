@@ -1,5 +1,5 @@
 
-# V1.16: database-backed final candidate-list lock with Level 2 unlock.
+# V1.16.1: require candidate photo and payment evidence before acceptance.
 import os, csv, re, uuid, base64, hmac, time
 from io import BytesIO
 import requests
@@ -86,6 +86,11 @@ with app.app_context():
         db.session.execute(text("ALTER TABLE candidate ADD COLUMN approval_status VARCHAR(20) NOT NULL DEFAULT 'pending'"))
     if db.session.get(PortalState,1) is None:
         db.session.add(PortalState(id=1,candidate_list_final=False))
+    # Older incomplete records must be reviewed again and cannot remain accepted.
+    db.session.execute(text(
+        "UPDATE candidate SET approval_status='pending' "
+        "WHERE approval_status='approved' AND (photo IS NULL OR payment_evidence IS NULL)"
+    ))
     db.session.commit()
 
 def logged_in():
@@ -537,6 +542,9 @@ def candidate_decision(candidate_id):
     decision=request.form.get("approval_status","").strip().lower()
     if decision not in {"pending","approved","rejected"}:
         abort(400)
+    if decision=="approved" and (not c.photo or not c.payment_evidence):
+        session["candidate_admin_error"]="This application cannot be Accepted until both the candidate photo and payment evidence have been uploaded."
+        return redirect(url_for("dashboard"))
     if candidate_list_is_final():
         session["candidate_admin_error"]="The candidate list became FINAL. The application decision was not changed."
         return redirect(url_for("dashboard"))
@@ -723,6 +731,8 @@ def save_candidate(c):
             c.photo_mime="image/jpeg"
         except Exception:
             return render_candidate_form_page(c,error="The cropped candidate photo could not be processed. Please select and crop the image again.")
+    if not c.photo:
+        return render_candidate_form_page(c,error="Candidate Photo is required. Select, crop and confirm a candidate photo before saving the application.")
 
     payment_upload=request.files.get("payment_evidence")
     try:
@@ -770,7 +780,8 @@ def api_candidates():
     county=request.args.get("county","")
     constituency=request.args.get("constituency","")
     ward=request.args.get("ward","")
-    rows=Candidate.query.filter_by(status="active",approval_status="approved").all()
+    rows=(Candidate.query.filter_by(status="active",approval_status="approved")
+          .filter(Candidate.photo.isnot(None),Candidate.payment_evidence.isnot(None)).all())
     out=[]
     for c in rows:
         scope=position_scope(c.position)
@@ -793,7 +804,8 @@ def api_candidates_position(position):
     county=request.args.get("county","")
     constituency=request.args.get("constituency","")
     ward=request.args.get("ward","")
-    rows=Candidate.query.filter_by(position=position,status="active",approval_status="approved").all()
+    rows=(Candidate.query.filter_by(position=position,status="active",approval_status="approved")
+          .filter(Candidate.photo.isnot(None),Candidate.payment_evidence.isnot(None)).all())
     out=[]
     scope=position_scope(position)
     for c in rows:
