@@ -1,5 +1,5 @@
 
-# V1.13: bind non-presidential candidacy to the applicant's verified voter area.
+# V1.13.1: safely upgrade pre-V1.13 candidate sessions after deployment.
 import os, csv, re, uuid, base64, hmac, time
 from io import BytesIO
 import requests
@@ -328,12 +328,39 @@ def candidate_dict(c):
     }
 
 def render_candidate_form_page(candidate=None, **context):
+    self_service=not logged_in()
+    raw_member=session.get("candidate_member",{})
+    verified_member=dict(raw_member) if isinstance(raw_member,dict) else {}
+    required_member_fields=("national_id","full_name","phone","email","membership_no","county","constituency","ward","polling_station","polling_station_code")
+    for field in required_member_fields:
+        verified_member[field]=str(verified_member.get(field,"") or "")
+    verified_member["geography_verified"]=bool(verified_member.get("geography_verified"))
+
+    # Candidates who remained logged in across the V1.13 deployment have an
+    # older session without voter-area fields. Refresh it transparently instead
+    # of allowing an Undefined value to trigger an HTTP 500 in the template.
+    if self_service and candidate_logged_in() and not verified_member["geography_verified"]:
+        try:
+            refreshed=lookup_membership(candidate_session_national_id())
+            if refreshed and (
+                not verified_member["phone"] or
+                hmac.compare_digest(phone_key(refreshed.get("phone","")),phone_key(verified_member["phone"]))
+            ):
+                verified_member={
+                    field:(bool(refreshed.get(field)) if field=="geography_verified" else str(refreshed.get(field,"") or ""))
+                    for field in (*required_member_fields,"geography_verified")
+                }
+                session["candidate_member"]=verified_member
+        except Exception:
+            # Safe empty defaults keep the page usable. The save route performs
+            # a fresh authoritative lookup and blocks unverifiable geography.
+            pass
     return render_template(
         "candidate_form.html",
         candidate=candidate,
         positions=POSITIONS,
-        self_service=not logged_in(),
-        verified_member=session.get("candidate_member",{}),
+        self_service=self_service,
+        verified_member=verified_member,
         **context
     )
 

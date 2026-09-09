@@ -240,3 +240,11 @@ V1.13 — CANDIDATE VOTER-AREA ELIGIBILITY
 - If voter geography cannot be verified unambiguously, non-presidential registration is blocked until the membership/voter record is corrected.
 
 No new environment variables are required.
+
+
+V1.13.1 — POST-DEPLOYMENT SESSION COMPATIBILITY FIX
+---------------------------------------------------
+- Fixes the candidate edit-page HTTP 500 seen by candidates who remained logged in during the V1.13 deployment.
+- Older sessions are automatically refreshed with the new voter-area fields from Kobo.
+- Missing session fields now receive safe defaults and cannot break template rendering.
+- If Kobo is temporarily unavailable during refresh, the page displays a sign-in instruction instead of an internal server error.
