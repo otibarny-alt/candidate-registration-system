@@ -1,12 +1,14 @@
 <!doctype html><link rel=stylesheet href=/static/style.css><meta name=viewport content="width=device-width,initial-scale=1">
-<div class=top><b>Candidate Registration & Profile Portal</b><a href=/>Back to Candidates</a></div>
+<div class=top><b>Candidate Registration & Profile Portal</b>{% if self_service %}<a href=/candidate/logout>Candidate Logout</a>{% else %}<a href=/>Back to Candidates</a>{% endif %}</div>
 <div class=wrap><div class=card><h2>{{"Edit Candidate" if candidate else "Register Candidate"}}</h2>
+{% if self_service %}<div class="privacy-notice"><b>Private application:</b> You are viewing only your own candidate information.</div>{% endif %}
+{% if saved %}<div class="success">Your candidate application has been saved successfully. You may review and correct your information on this page.</div>{% endif %}
 {% if error %}<div class=error>{{error}}</div>{% endif %}
 <form method=post enctype=multipart/form-data id=candidateForm>
 <div class=grid>
 <div><label>National ID</label>
-<div class="lookup-row"><input id="national_id" name=national_id inputmode="numeric" autocomplete="off" required value="{{candidate.national_id if candidate else ''}}"><button type="button" class="lookup-btn" id="lookup_member_btn">Lookup Member</button></div>
-<div id="member_lookup_status" class="lookup-status">{% if candidate %}Member data loaded from saved candidate record.{% else %}Enter the applicant's National ID first. The system will verify membership and confirm that the ID has not already submitted another candidate application.{% endif %}</div>
+<div class="lookup-row"><input id="national_id" name=national_id inputmode="numeric" autocomplete="off" required {% if self_service %}readonly{% endif %} value="{{candidate.national_id if candidate else (verified_member.national_id if verified_member else '')}}">{% if not self_service %}<button type="button" class="lookup-btn" id="lookup_member_btn">Lookup Member</button>{% endif %}</div>
+<div id="member_lookup_status" class="lookup-status">{% if self_service %}✓ Identity confirmed using your National ID and registered phone number.{% elif candidate %}Member data loaded from saved candidate record.{% else %}Enter the applicant's National ID first. The system will verify membership and confirm that the ID has not already submitted another candidate application.{% endif %}</div>
 </div>
 
 <div><label>Candidate ID</label>
@@ -19,21 +21,21 @@
 {% endif %}
 </div>
 
-<div><label>Full Name</label><input id="full_name" name=full_name readonly required value="{{candidate.full_name if candidate else ''}}">
+<div><label>Full Name</label><input id="full_name" name=full_name readonly required value="{{candidate.full_name if candidate else (verified_member.full_name if verified_member else '')}}">
 <small class="muted">Pulled from Kobo Membership Registration.</small></div>
 
-<div><label>Phone</label><input id="phone" name=phone readonly value="{{candidate.phone if candidate else ''}}"><small class="muted">Pulled from Kobo.</small></div>
+<div><label>Phone</label><input id="phone" name=phone readonly value="{{candidate.phone if candidate else (verified_member.phone if verified_member else '')}}"><small class="muted">Pulled from Kobo.</small></div>
 
-<div><label>Email</label><input id="email" name=email readonly value="{{candidate.email if candidate else ''}}"><small class="muted">Pulled from Kobo.</small></div>
+<div><label>Email</label><input id="email" name=email readonly value="{{candidate.email if candidate else (verified_member.email if verified_member else '')}}"><small class="muted">Pulled from Kobo.</small></div>
 
-<div><label>Membership No.</label><input id="membership_no" name=membership_no readonly value="{{candidate.membership_no if candidate else ''}}"><small class="muted">Pulled from Kobo.</small></div>
+<div><label>Membership No.</label><input id="membership_no" name=membership_no readonly value="{{candidate.membership_no if candidate else (verified_member.membership_no if verified_member else '')}}"><small class="muted">Pulled from Kobo.</small></div>
 
 <div><label>Position Applied For</label>
 <select name=position id=position required>
 <option value="">Select position</option>
 {% for key,label,scope in positions %}<option value="{{key}}" data-scope="{{scope}}" {% if candidate and candidate.position==key %}selected{% endif %}>{{label}}</option>{% endfor %}
 </select></div>
-<div><label>Status</label><select name=status><option value=active {% if not candidate or candidate.status=="active" %}selected{% endif %}>Active</option><option value=inactive {% if candidate and candidate.status=="inactive" %}selected{% endif %}>Inactive</option></select></div>
+{% if not self_service %}<div><label>Status</label><select name=status><option value=active {% if not candidate or candidate.status=="active" %}selected{% endif %}>Active</option><option value=inactive {% if candidate and candidate.status=="inactive" %}selected{% endif %}>Inactive</option></select></div>{% endif %}
 <div id=countyBox><label>County</label><select name=county id=county><option value="">Select County</option></select></div>
 <div id=constBox><label>Constituency</label><select name=constituency id=constituency><option value="">Select Constituency</option></select></div>
 <div id=wardBox><label>Ward</label><select name=ward id=ward><option value="">Select Ward</option></select></div>
@@ -116,7 +118,7 @@ fetch('/api/hierarchy').then(r=>r.json()).then(d=>{
  applyScope();
 });
 
-let memberVerified={{ 'true' if candidate else 'false' }};
+let memberVerified={{ 'true' if candidate or self_service else 'false' }};
 const nationalId=document.getElementById('national_id');
 const lookupBtn=document.getElementById('lookup_member_btn');
 const lookupStatus=document.getElementById('member_lookup_status');
@@ -184,9 +186,9 @@ async function lookupMember(){
   }
 }
 
-lookupBtn.addEventListener('click',lookupMember);
-nationalId.addEventListener('change',lookupMember);
-nationalId.addEventListener('input',()=>{
+if(lookupBtn)lookupBtn.addEventListener('click',lookupMember);
+if(!nationalId.readOnly)nationalId.addEventListener('change',lookupMember);
+if(!nationalId.readOnly)nationalId.addEventListener('input',()=>{
   if(memberVerified){
     clearMemberFields();
     lookupStatus.className='lookup-status';

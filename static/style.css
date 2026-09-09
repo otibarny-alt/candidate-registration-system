@@ -14,6 +14,8 @@ input[readonly]{background:#f1f3f5}
 .payment-evidence-field{margin:18px 0;padding:16px;border:2px solid #e97817;border-radius:10px;background:#fff8ef}
 .payment-evidence-field label{font-size:18px}
 .payment-evidence-field .existing-photo-wrap{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.privacy-notice{background:#eef6ff;border:1px solid #6b9fd3;padding:12px;border-radius:8px;margin-bottom:12px}
+.success{background:#e6f6ea;border:1px solid #72b783;color:#175c29;font-weight:700;padding:12px;border-radius:8px;margin-bottom:12px}
 
 #national_id{font-size:18px;font-weight:700}
 

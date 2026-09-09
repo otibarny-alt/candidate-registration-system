@@ -210,3 +210,18 @@ V1.11 — PAYMENT EVIDENCE IMAGE
 - Logged-in administrators can open the saved evidence from the candidate list or edit screen.
 - The public candidate API does not expose or load payment-evidence images.
 - Existing databases are upgraded automatically with the new payment-evidence columns during deployment.
+
+
+V1.12 — PRIVATE CANDIDATE SELF-SERVICE
+--------------------------------------
+- The registered-candidate list at / is administrator-only.
+- Candidates enter through /candidate-access using National ID plus the phone number held in Kobo Membership Registration.
+- Candidate sessions are bound to one National ID and can view or edit only that candidate's application.
+- Server-side ownership checks block direct URL attempts to edit another candidate or view another candidate's payment evidence.
+- Candidate status remains an administrator-only field.
+- Candidates never return to the full candidate list after saving; they return to their own private application.
+- Failed candidate-login attempts are rate-limited.
+- The existing administrator username/password and full candidate-management screen remain unchanged.
+
+No new environment variables are required. Candidate access uses the existing
+KOBO_BASE_URL, MEMBERSHIP_ASSET_UID and KOBO_API_TOKEN connection.

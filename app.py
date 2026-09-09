@@ -1,5 +1,6 @@
 
-import os, csv, re, uuid, base64
+# V1.12: separate administrator and private candidate access with ownership enforcement.
+import os, csv, re, uuid, base64, hmac, time
 from io import BytesIO
 import requests
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response, abort
@@ -26,6 +27,7 @@ db=SQLAlchemy(app)
 COUNTY_MAIN=os.getenv("COUNTY_MAIN_FILENAME","county_main.csv")
 AUTH_USERNAME=os.getenv("AUTH_USERNAME","admin")
 AUTH_PASSWORD_HASH=os.getenv("AUTH_PASSWORD_HASH","")
+_CANDIDATE_LOGIN_ATTEMPTS={}
 
 KOBO_BASE_URL=os.getenv("KOBO_BASE_URL","https://kf.kobotoolbox.org").rstrip("/")
 MEMBERSHIP_ASSET_UID=os.getenv("MEMBERSHIP_ASSET_UID","").strip()
@@ -76,13 +78,39 @@ with app.app_context():
 def logged_in():
     return bool(session.get("admin"))
 
+def candidate_logged_in():
+    return bool(session.get("candidate_national_id"))
+
 def require_login():
     if not logged_in():
         return redirect(url_for("login"))
     return None
 
+def candidate_session_national_id():
+    return str(session.get("candidate_national_id") or "").strip()
+
+def candidate_can_access(c):
+    return logged_in() or (
+        candidate_logged_in() and
+        hmac.compare_digest(str(c.national_id or "").strip(),candidate_session_national_id())
+    )
+
 def norm(v):
     return re.sub(r"[^a-z0-9]+","_",str(v or "").strip().lower()).strip("_")
+
+def phone_key(value):
+    """Compare Kenyan phone formats by their stable final nine digits."""
+    digits=re.sub(r"\D+","",str(value or ""))
+    return digits[-9:] if len(digits)>=9 else digits
+
+def candidate_login_rate_limited(client_key):
+    now=time.time()
+    recent=[stamp for stamp in _CANDIDATE_LOGIN_ATTEMPTS.get(client_key,[]) if now-stamp<900]
+    _CANDIDATE_LOGIN_ATTEMPTS[client_key]=recent
+    return len(recent)>=8
+
+def record_candidate_login_failure(client_key):
+    _CANDIDATE_LOGIN_ATTEMPTS.setdefault(client_key,[]).append(time.time())
 
 def validated_image_upload(upload, field_label, max_bytes=5*1024*1024):
     """Read and validate a JPG, PNG or WebP upload by its actual signature."""
@@ -246,6 +274,16 @@ def candidate_dict(c):
       "photo_url":url_for("candidate_photo",candidate_id=c.id,_external=True) if c.photo else None
     }
 
+def render_candidate_form_page(candidate=None, **context):
+    return render_template(
+        "candidate_form.html",
+        candidate=candidate,
+        positions=POSITIONS,
+        self_service=not logged_in(),
+        verified_member=session.get("candidate_member",{}),
+        **context
+    )
+
 @app.get("/login")
 def login():
     return render_template("login.html")
@@ -257,8 +295,51 @@ def login_post():
     ok=(u==AUTH_USERNAME and AUTH_PASSWORD_HASH and check_password_hash(AUTH_PASSWORD_HASH,p))
     if not ok:
         return render_template("login.html",error="Invalid username or password.")
+    session.clear()
     session["admin"]=True
     return redirect(url_for("dashboard"))
+
+@app.route("/candidate-access",methods=["GET","POST"])
+def candidate_access():
+    if request.method=="GET":
+        return render_template("candidate_access.html")
+    client_key=request.headers.get("X-Forwarded-For",request.remote_addr or "").split(",")[0].strip()
+    if candidate_login_rate_limited(client_key):
+        return render_template("candidate_access.html",error="Too many unsuccessful attempts. Please wait 15 minutes before trying again."),429
+    national_id=request.form.get("national_id","").strip()
+    phone=request.form.get("phone","").strip()
+    if not national_id.isdigit() or not phone_key(phone):
+        record_candidate_login_failure(client_key)
+        return render_template("candidate_access.html",error="Enter a valid National ID and registered phone number."),400
+    try:
+        member=lookup_membership(national_id)
+    except requests.RequestException:
+        return render_template("candidate_access.html",error="Unable to contact Kobo Membership Registration. Please try again."),502
+    except RuntimeError as exc:
+        return render_template("candidate_access.html",error=str(exc)),500
+    registered_phone=phone_key((member or {}).get("phone",""))
+    if not member or not registered_phone or not hmac.compare_digest(registered_phone,phone_key(phone)):
+        record_candidate_login_failure(client_key)
+        return render_template("candidate_access.html",error="The National ID and phone number do not match the membership record."),403
+    _CANDIDATE_LOGIN_ATTEMPTS.pop(client_key,None)
+    session.clear()
+    session["candidate_national_id"]=national_id
+    session["candidate_member"]={k:str(member.get(k,"") or "") for k in ("national_id","full_name","phone","email","membership_no")}
+    return redirect(url_for("candidate_home"))
+
+@app.get("/candidate/logout")
+def candidate_logout():
+    session.clear()
+    return redirect(url_for("candidate_access"))
+
+@app.get("/candidate/my-application")
+def candidate_home():
+    if not candidate_logged_in():
+        return redirect(url_for("candidate_access"))
+    existing=existing_candidate_for_national_id(candidate_session_national_id())
+    if existing:
+        return redirect(url_for("candidate_edit",candidate_id=existing.id))
+    return redirect(url_for("candidate_new"))
 
 @app.get("/logout")
 def logout():
@@ -268,7 +349,9 @@ def logout():
 @app.get("/")
 def dashboard():
     if not logged_in():
-        return redirect(url_for("login"))
+        if candidate_logged_in():
+            return redirect(url_for("candidate_home"))
+        return redirect(url_for("candidate_access"))
     candidates=Candidate.query.order_by(Candidate.position,Candidate.county,Candidate.constituency,Candidate.ward,Candidate.full_name).all()
     return render_template("dashboard.html",candidates=candidates,positions=POSITIONS)
 
@@ -279,10 +362,12 @@ def api_hierarchy():
 
 @app.get("/api/member-lookup")
 def api_member_lookup():
-    if not logged_in():
+    if not logged_in() and not candidate_logged_in():
         return jsonify({"ok":False,"error":"Login required."}), 401
 
     national_id=request.args.get("national_id","").strip()
+    if candidate_logged_in() and not logged_in() and not hmac.compare_digest(national_id,candidate_session_national_id()):
+        return jsonify({"ok":False,"error":"You may verify only your own membership record."}),403
     if not national_id:
         return jsonify({"ok":False,"error":"Enter a National ID number."}), 400
     if not national_id.isdigit():
@@ -327,19 +412,25 @@ def api_member_lookup():
 
 @app.route("/candidate/new",methods=["GET","POST"])
 def candidate_new():
-    r=require_login()
-    if r:return r
+    if not logged_in() and not candidate_logged_in():
+        return redirect(url_for("candidate_access"))
+    if candidate_logged_in() and not logged_in():
+        existing=existing_candidate_for_national_id(candidate_session_national_id())
+        if existing:
+            return redirect(url_for("candidate_edit",candidate_id=existing.id))
     if request.method=="GET":
-        return render_template("candidate_form.html",candidate=None,positions=POSITIONS)
+        return render_candidate_form_page()
     return save_candidate(None)
 
 @app.route("/candidate/<int:candidate_id>/edit",methods=["GET","POST"])
 def candidate_edit(candidate_id):
-    r=require_login()
-    if r:return r
+    if not logged_in() and not candidate_logged_in():
+        return redirect(url_for("candidate_access"))
     c=Candidate.query.get_or_404(candidate_id)
+    if not candidate_can_access(c):
+        abort(403)
     if request.method=="GET":
-        return render_template("candidate_form.html",candidate=c,positions=POSITIONS)
+        return render_candidate_form_page(c,saved=request.args.get("saved")=="1")
     return save_candidate(c)
 
 def save_candidate(c):
@@ -348,7 +439,7 @@ def save_candidate(c):
     scope=position_scope(position)
     name=f.get("full_name","").strip()
     if not name or position not in dict((k,label) for k,label,_ in POSITIONS):
-        return render_template("candidate_form.html",candidate=c,positions=POSITIONS,error="Full name and position are required.")
+        return render_candidate_form_page(c,error="Full name and position are required.")
 
     is_new = c is None
     if is_new:
@@ -365,8 +456,10 @@ def save_candidate(c):
         c.candidate_id=f"CAND-{c.id:06d}"
 
     national_id=f.get("national_id","").strip()
+    if candidate_logged_in() and not logged_in() and not hmac.compare_digest(national_id,candidate_session_national_id()):
+        abort(403)
     if not national_id:
-        return render_template("candidate_form.html",candidate=c,positions=POSITIONS,error="National ID is required and must be verified against Kobo Membership Registration.")
+        return render_candidate_form_page(c,error="National ID is required and must be verified against Kobo Membership Registration.")
 
     duplicate=existing_candidate_for_national_id(national_id, c.id if c else None)
     if duplicate:
@@ -376,25 +469,21 @@ def save_candidate(c):
             else duplicate.constituency if duplicate.position=="mna"
             else duplicate.county
         )
-        return render_template(
-            "candidate_form.html",
-            candidate=c,
-            positions=POSITIONS,
+        return render_candidate_form_page(
+            c,
             error=f"This National ID is already registered as candidate {duplicate.candidate_id} for {duplicate.position.upper()} in {area or 'the selected electoral area'}. One National ID can submit only one candidate application."
         )
 
     try:
         member=lookup_membership(national_id)
     except requests.RequestException:
-        return render_template("candidate_form.html",candidate=c,positions=POSITIONS,error="Unable to contact Kobo Membership Registration. Candidate was not saved.")
+        return render_candidate_form_page(c,error="Unable to contact Kobo Membership Registration. Candidate was not saved.")
     except RuntimeError as e:
-        return render_template("candidate_form.html",candidate=c,positions=POSITIONS,error=str(e))
+        return render_candidate_form_page(c,error=str(e))
 
     if not member:
-        return render_template(
-            "candidate_form.html",
-            candidate=c,
-            positions=POSITIONS,
+        return render_candidate_form_page(
+            c,
             error="National ID not found in the Membership Registration Database. The applicant must first be registered as a member."
         )
 
@@ -406,18 +495,18 @@ def save_candidate(c):
     c.membership_no=member.get("membership_no","")
     c.position=position
     c.bio=f.get("bio","").strip()
-    c.status=f.get("status","active").strip() or "active"
+    c.status=(f.get("status","active").strip() or "active") if logged_in() else "active"
 
     c.county="" if scope=="national" else f.get("county","").strip()
     c.constituency=f.get("constituency","").strip() if scope in ("constituency","ward") else ""
     c.ward=f.get("ward","").strip() if scope=="ward" else ""
 
     if scope=="county" and not c.county:
-        return render_template("candidate_form.html",candidate=c,positions=POSITIONS,error="County is required for this position.")
+        return render_candidate_form_page(c,error="County is required for this position.")
     if scope=="constituency" and (not c.county or not c.constituency):
-        return render_template("candidate_form.html",candidate=c,positions=POSITIONS,error="County and Constituency are required for MNA.")
+        return render_candidate_form_page(c,error="County and Constituency are required for MNA.")
     if scope=="ward" and (not c.county or not c.constituency or not c.ward):
-        return render_template("candidate_form.html",candidate=c,positions=POSITIONS,error="County, Constituency and Ward are required for MCA.")
+        return render_candidate_form_page(c,error="County, Constituency and Ward are required for MCA.")
 
     cropped_photo=f.get("cropped_photo","").strip()
     if cropped_photo:
@@ -428,21 +517,23 @@ def save_candidate(c):
             c.photo=base64.b64decode(encoded)
             c.photo_mime="image/jpeg"
         except Exception:
-            return render_template("candidate_form.html",candidate=c,positions=POSITIONS,error="The cropped candidate photo could not be processed. Please select and crop the image again.")
+            return render_candidate_form_page(c,error="The cropped candidate photo could not be processed. Please select and crop the image again.")
 
     payment_upload=request.files.get("payment_evidence")
     try:
         payment_data,payment_mime=validated_image_upload(payment_upload,"Payment Evidence")
     except ValueError as exc:
-        return render_template("candidate_form.html",candidate=c,positions=POSITIONS,error=str(exc))
+        return render_candidate_form_page(c,error=str(exc))
     if payment_data:
         c.payment_evidence=payment_data
         c.payment_evidence_mime=payment_mime
     elif not c.payment_evidence:
-        return render_template("candidate_form.html",candidate=c,positions=POSITIONS,error="Payment Evidence is required. Upload a clear JPG, PNG or WebP image before saving the candidate.")
+        return render_candidate_form_page(c,error="Payment Evidence is required. Upload a clear JPG, PNG or WebP image before saving the candidate.")
 
     db.session.commit()
-    return redirect(url_for("dashboard"))
+    if logged_in():
+        return redirect(url_for("dashboard"))
+    return redirect(url_for("candidate_edit",candidate_id=c.id,saved=1))
 
 @app.get("/candidate-photo/<int:candidate_id>")
 def candidate_photo(candidate_id):
@@ -453,9 +544,11 @@ def candidate_photo(candidate_id):
 
 @app.get("/payment-evidence/<int:candidate_id>")
 def payment_evidence(candidate_id):
-    r=require_login()
-    if r:return r
     c=Candidate.query.get_or_404(candidate_id)
+    if not candidate_can_access(c):
+        if not logged_in() and not candidate_logged_in():
+            return redirect(url_for("candidate_access"))
+        abort(403)
     if not c.payment_evidence:
         abort(404)
     return Response(
