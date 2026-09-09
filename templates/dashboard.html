@@ -13,16 +13,31 @@
 <td>{% if c.payment_evidence %}<a href="/payment-evidence/{{c.id}}" target="_blank" rel="noopener">View Image</a>{% else %}<span class=muted>Not uploaded</span>{% endif %}</td>
 <td>{{c.status}}</td>
 <td><a href="/candidate/{{c.id}}/edit">Edit</a></td>
-<td><form method="post" action="/candidate/{{c.id}}/decision" class="decision-form decision-state-{{c.approval_status or 'pending'}}"><select name="approval_status" aria-label="Application decision for {{c.full_name}}"><option value="pending" {% if (c.approval_status or 'pending')=='pending' %}selected{% endif %}>Pending</option><option value="approved" {% if c.approval_status=='approved' %}selected{% endif %}>Accepted</option><option value="rejected" {% if c.approval_status=='rejected' %}selected{% endif %}>Rejected</option></select><button type="submit">Update</button></form></td>
+<td><form method="post" action="/candidate/{{c.id}}/decision" class="decision-form decision-state-{{c.approval_status or 'pending'}}"><select name="approval_status" data-saved-value="{{c.approval_status or 'pending'}}" aria-label="Application decision for {{c.full_name}}"><option value="pending" {% if (c.approval_status or 'pending')=='pending' %}selected{% endif %}>Pending</option><option value="approved" {% if c.approval_status=='approved' %}selected{% endif %}>Accepted</option><option value="rejected" {% if c.approval_status=='rejected' %}selected{% endif %}>Rejected</option></select><button type="submit" class="decision-update-saved" disabled>✓ Updated</button></form></td>
 </tr>
 {% else %}<tr><td colspan=9>No candidates registered yet.</td></tr>{% endfor %}
 </table></div></div>
 <script>
 document.querySelectorAll('.decision-form select').forEach(function(select){
-  select.addEventListener('change',function(){
+  const form=select.closest('.decision-form');
+  const button=form.querySelector('button[type="submit"]');
+  function refreshDecisionState(){
     const form=select.closest('.decision-form');
     form.classList.remove('decision-state-pending','decision-state-approved','decision-state-rejected');
     form.classList.add('decision-state-'+select.value);
+    const changed=select.value!==select.dataset.savedValue;
+    button.disabled=!changed;
+    button.classList.toggle('decision-update-required',changed);
+    button.classList.toggle('decision-update-saved',!changed);
+    button.textContent=changed?'✕ Update':'✓ Updated';
+  }
+  select.addEventListener('change',refreshDecisionState);
+  form.addEventListener('submit',function(){
+    button.disabled=true;
+    button.classList.remove('decision-update-required');
+    button.classList.add('decision-update-saving');
+    button.textContent='Updating…';
   });
+  refreshDecisionState();
 });
 </script>

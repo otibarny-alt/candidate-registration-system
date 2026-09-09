@@ -1,5 +1,5 @@
 
-# V1.15.1: colour-coded application decisions in the final dashboard column.
+# V1.15.2: clear saved/unsaved administrator decision controls.
 import os, csv, re, uuid, base64, hmac, time
 from io import BytesIO
 import requests

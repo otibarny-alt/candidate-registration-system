@@ -270,3 +270,11 @@ V1.15.1 — APPLICATION DECISION DISPLAY
 - Moves Application Decision to the final column of the administrator candidate list.
 - Displays Pending in orange, Accepted in green and Rejected in red.
 - Updates the colour immediately when an administrator changes the selection.
+
+V1.15.2 — DECISION UPDATE CONFIRMATION
+-------------------------------------
+
+- Shows a grey, disabled “✓ Updated” button when the displayed decision is already saved.
+- Changes the button to a blue, active “✕ Update” control when an administrator selects a different decision.
+- Returning the selector to its saved value restores “✓ Updated” without sending an unnecessary update.
+- Shows “Updating…” while a changed decision is being saved.
