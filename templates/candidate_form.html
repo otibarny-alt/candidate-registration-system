@@ -55,6 +55,7 @@
     <label for="crop_zoom">Zoom</label>
     <input type="range" id="crop_zoom" min="1" max="4" step="0.01" value="1">
     <button type="button" id="crop_reset_btn" class="secondary-btn">Reset</button>
+    <button type="button" id="crop_cancel_btn" class="photo-cancel-btn">Cancel Photo Change</button>
     <button type="button" id="crop_confirm_btn">Crop & Use Photo</button>
   </div>
   <div id="crop_status" class="lookup-status">Waiting for photo.</div>
@@ -86,7 +87,10 @@
 {% endif %}
 </div>
 <label>Short Biography</label><textarea name=bio rows=7 placeholder="Candidate biography, experience, priorities, etc.">{{candidate.bio if candidate else ''}}</textarea>
-<button>Save Candidate</button>
+<div class="form-actions">
+  <button type="submit">Save Candidate</button>
+  <a class="btn cancel-edit-btn" href="{{ url_for('candidate_home') if self_service else url_for('dashboard') }}">Cancel Edit</a>
+</div>
 </form></div></div>
 
 <script>
@@ -220,4 +224,4 @@ candidateForm.addEventListener('submit',e=>{
 
 
 </script>
-<script src="/static/photo_cropper.js?v=17"></script>
+<script src="/static/photo_cropper.js?v=18"></script>

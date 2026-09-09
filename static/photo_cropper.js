@@ -10,6 +10,7 @@
     const zoom=document.getElementById('crop_zoom');
     const confirmBtn=document.getElementById('crop_confirm_btn');
     const resetBtn=document.getElementById('crop_reset_btn');
+    const cancelBtn=document.getElementById('crop_cancel_btn');
     const status=document.getElementById('crop_status');
     const previewWrap=document.getElementById('cropped_preview_wrap');
     const preview=document.getElementById('cropped_preview');
@@ -129,6 +130,24 @@
     });
 
     resetBtn.addEventListener('click',reset);
+
+    function cancelPhotoChange(){
+      input.value='';
+      hidden.value='';
+      img=null;
+      dragging=false;
+      zoom.value='1';
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      preview.removeAttribute('src');
+      previewWrap.hidden=true;
+      wrap.hidden=true;
+      status.className='lookup-status';
+      status.textContent='Photo change cancelled. The current saved photo will be kept.';
+    }
+
+    if(cancelBtn){
+      cancelBtn.addEventListener('click',cancelPhotoChange);
+    }
 
     function begin(ev){
       if(!img) return;

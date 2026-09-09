@@ -1,5 +1,5 @@
 
-# V1.13.1: safely upgrade pre-V1.13 candidate sessions after deployment.
+# V1.14: candidate edit and candidate-photo change cancellation controls.
 import os, csv, re, uuid, base64, hmac, time
 from io import BytesIO
 import requests

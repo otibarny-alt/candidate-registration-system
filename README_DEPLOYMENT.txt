@@ -248,3 +248,9 @@ V1.13.1 — POST-DEPLOYMENT SESSION COMPATIBILITY FIX
 - Older sessions are automatically refreshed with the new voter-area fields from Kobo.
 - Missing session fields now receive safe defaults and cannot break template rendering.
 - If Kobo is temporarily unavailable during refresh, the page displays a sign-in instruction instead of an internal server error.
+
+V1.14 — CANCEL EDIT CONTROLS
+----------------------------
+
+- Adds a Cancel Edit button that discards unsaved changes and returns candidates to their private application page or administrators to the candidate list.
+- Adds a Cancel Photo Change button to clear a newly selected or cropped image while retaining the currently saved candidate photo.
