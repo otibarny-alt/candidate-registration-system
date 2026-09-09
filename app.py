@@ -1,5 +1,5 @@
 
-# V1.14: candidate edit and candidate-photo change cancellation controls.
+# V1.15: administrator application decisions and approved-only ballot feeds.
 import os, csv, re, uuid, base64, hmac, time
 from io import BytesIO
 import requests
@@ -62,6 +62,7 @@ class Candidate(db.Model):
     payment_evidence=deferred(db.Column(db.LargeBinary))
     payment_evidence_mime=db.Column(db.String(80))
     status=db.Column(db.String(20),default="active",nullable=False,index=True)
+    approval_status=db.Column(db.String(20),default="pending",nullable=False,index=True)
 
 with app.app_context():
     db.create_all()
@@ -73,6 +74,8 @@ with app.app_context():
         db.session.execute(text(f"ALTER TABLE candidate ADD COLUMN payment_evidence {binary_type}"))
     if "payment_evidence_mime" not in candidate_columns:
         db.session.execute(text("ALTER TABLE candidate ADD COLUMN payment_evidence_mime VARCHAR(80)"))
+    if "approval_status" not in candidate_columns:
+        db.session.execute(text("ALTER TABLE candidate ADD COLUMN approval_status VARCHAR(20) NOT NULL DEFAULT 'pending'"))
     db.session.commit()
 
 def logged_in():
@@ -324,6 +327,7 @@ def candidate_dict(c):
       "ward":c.ward or "",
       "bio":c.bio or "",
       "status":c.status,
+      "approval_status":c.approval_status,
       "photo_url":url_for("candidate_photo",candidate_id=c.id,_external=True) if c.photo else None
     }
 
@@ -434,6 +438,19 @@ def dashboard():
         return redirect(url_for("candidate_access"))
     candidates=Candidate.query.order_by(Candidate.position,Candidate.county,Candidate.constituency,Candidate.ward,Candidate.full_name).all()
     return render_template("dashboard.html",candidates=candidates,positions=POSITIONS)
+
+@app.post("/candidate/<int:candidate_id>/decision")
+def candidate_decision(candidate_id):
+    auth=require_login()
+    if auth:
+        return auth
+    c=Candidate.query.get_or_404(candidate_id)
+    decision=request.form.get("approval_status","").strip().lower()
+    if decision not in {"pending","approved","rejected"}:
+        abort(400)
+    c.approval_status=decision
+    db.session.commit()
+    return redirect(url_for("dashboard"))
 
 @app.get("/api/hierarchy")
 def api_hierarchy():
@@ -576,6 +593,11 @@ def save_candidate(c):
     c.position=position
     c.bio=f.get("bio","").strip()
     c.status=(f.get("status","active").strip() or "active") if logged_in() else "active"
+    if logged_in():
+        decision=f.get("approval_status",c.approval_status or "pending").strip().lower()
+        c.approval_status=decision if decision in {"pending","approved","rejected"} else "pending"
+    elif is_new:
+        c.approval_status="pending"
 
     c.county="" if scope=="national" else f.get("county","").strip()
     c.constituency=f.get("constituency","").strip() if scope in ("constituency","ward") else ""
@@ -646,7 +668,7 @@ def api_candidates():
     county=request.args.get("county","")
     constituency=request.args.get("constituency","")
     ward=request.args.get("ward","")
-    rows=Candidate.query.filter_by(status="active").all()
+    rows=Candidate.query.filter_by(status="active",approval_status="approved").all()
     out=[]
     for c in rows:
         scope=position_scope(c.position)
@@ -669,7 +691,7 @@ def api_candidates_position(position):
     county=request.args.get("county","")
     constituency=request.args.get("constituency","")
     ward=request.args.get("ward","")
-    rows=Candidate.query.filter_by(position=position,status="active").all()
+    rows=Candidate.query.filter_by(position=position,status="active",approval_status="approved").all()
     out=[]
     scope=position_scope(position)
     for c in rows:

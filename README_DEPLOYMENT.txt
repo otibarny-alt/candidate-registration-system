@@ -254,3 +254,12 @@ V1.14 — CANCEL EDIT CONTROLS
 
 - Adds a Cancel Edit button that discards unsaved changes and returns candidates to their private application page or administrators to the candidate list.
 - Adds a Cancel Photo Change button to clear a newly selected or cropped image while retaining the currently saved candidate photo.
+
+V1.15 — ADMINISTRATOR APPLICATION DECISIONS
+-------------------------------------------
+
+- Adds Pending, Approved and Rejected application decisions controlled only by an authenticated administrator.
+- Existing and newly submitted applications default to Pending and therefore do not enter a ballot automatically.
+- Candidate users can see their current decision but cannot alter it.
+- Both public candidate API routes return only candidates whose records are Active and whose applications are Approved.
+- Administrators can update decisions directly from the registered-candidates list or from the candidate edit page.
