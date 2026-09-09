@@ -71,6 +71,17 @@
 {% endif %}
 </div>
 </div>
+<div class="payment-evidence-field">
+<label for="payment_evidence">Payment Evidence</label>
+<input type="file" id="payment_evidence" name="payment_evidence" accept="image/jpeg,image/png,image/webp" {% if not candidate or not candidate.payment_evidence %}required{% endif %}>
+<small class="muted">Required image evidence. Accepted formats: JPG, PNG or WebP; maximum size 5 MB.</small>
+{% if candidate and candidate.payment_evidence %}
+<div class="existing-photo-wrap">
+  <span class="muted">Current payment evidence is saved.</span>
+  <a href="/payment-evidence/{{candidate.id}}" target="_blank" rel="noopener">View Payment Evidence</a>
+</div>
+{% endif %}
+</div>
 <label>Short Biography</label><textarea name=bio rows=7 placeholder="Candidate biography, experience, priorities, etc.">{{candidate.bio if candidate else ''}}</textarea>
 <button>Save Candidate</button>
 </form></div></div>

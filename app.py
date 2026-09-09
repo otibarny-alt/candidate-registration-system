@@ -4,6 +4,8 @@ from io import BytesIO
 import requests
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response, abort
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import inspect, text
+from sqlalchemy.orm import deferred
 from werkzeug.security import check_password_hash
 
 app=Flask(__name__)
@@ -53,10 +55,23 @@ class Candidate(db.Model):
     bio=db.Column(db.Text)
     photo=db.Column(db.LargeBinary)
     photo_mime=db.Column(db.String(80))
+    # Payment evidence can be several megabytes. Defer loading it so the public
+    # ballot candidate API never pulls every receipt into memory.
+    payment_evidence=deferred(db.Column(db.LargeBinary))
+    payment_evidence_mime=db.Column(db.String(80))
     status=db.Column(db.String(20),default="active",nullable=False,index=True)
 
 with app.app_context():
     db.create_all()
+    # create_all() does not add columns to an existing Render PostgreSQL table.
+    # Apply this small, backwards-compatible migration during deployment.
+    candidate_columns={column["name"] for column in inspect(db.engine).get_columns("candidate")}
+    binary_type="BYTEA" if db.engine.dialect.name=="postgresql" else "BLOB"
+    if "payment_evidence" not in candidate_columns:
+        db.session.execute(text(f"ALTER TABLE candidate ADD COLUMN payment_evidence {binary_type}"))
+    if "payment_evidence_mime" not in candidate_columns:
+        db.session.execute(text("ALTER TABLE candidate ADD COLUMN payment_evidence_mime VARCHAR(80)"))
+    db.session.commit()
 
 def logged_in():
     return bool(session.get("admin"))
@@ -68,6 +83,25 @@ def require_login():
 
 def norm(v):
     return re.sub(r"[^a-z0-9]+","_",str(v or "").strip().lower()).strip("_")
+
+def validated_image_upload(upload, field_label, max_bytes=5*1024*1024):
+    """Read and validate a JPG, PNG or WebP upload by its actual signature."""
+    if not upload or not str(upload.filename or "").strip():
+        return None, None
+    data=upload.read(max_bytes+1)
+    if not data:
+        raise ValueError(f"{field_label} is empty.")
+    if len(data)>max_bytes:
+        raise ValueError(f"{field_label} must not exceed 5 MB.")
+    if data.startswith(b"\xff\xd8\xff"):
+        mime="image/jpeg"
+    elif data.startswith(b"\x89PNG\r\n\x1a\n"):
+        mime="image/png"
+    elif len(data)>=12 and data[:4]==b"RIFF" and data[8:12]==b"WEBP":
+        mime="image/webp"
+    else:
+        raise ValueError(f"{field_label} must be a valid JPG, PNG or WebP image.")
+    return data, mime
 
 def hierarchy_rows():
     try:
@@ -396,6 +430,17 @@ def save_candidate(c):
         except Exception:
             return render_template("candidate_form.html",candidate=c,positions=POSITIONS,error="The cropped candidate photo could not be processed. Please select and crop the image again.")
 
+    payment_upload=request.files.get("payment_evidence")
+    try:
+        payment_data,payment_mime=validated_image_upload(payment_upload,"Payment Evidence")
+    except ValueError as exc:
+        return render_template("candidate_form.html",candidate=c,positions=POSITIONS,error=str(exc))
+    if payment_data:
+        c.payment_evidence=payment_data
+        c.payment_evidence_mime=payment_mime
+    elif not c.payment_evidence:
+        return render_template("candidate_form.html",candidate=c,positions=POSITIONS,error="Payment Evidence is required. Upload a clear JPG, PNG or WebP image before saving the candidate.")
+
     db.session.commit()
     return redirect(url_for("dashboard"))
 
@@ -405,6 +450,19 @@ def candidate_photo(candidate_id):
     if not c.photo:
         abort(404)
     return Response(c.photo,content_type=c.photo_mime or "image/jpeg")
+
+@app.get("/payment-evidence/<int:candidate_id>")
+def payment_evidence(candidate_id):
+    r=require_login()
+    if r:return r
+    c=Candidate.query.get_or_404(candidate_id)
+    if not c.payment_evidence:
+        abort(404)
+    return Response(
+        c.payment_evidence,
+        content_type=c.payment_evidence_mime or "image/jpeg",
+        headers={"Content-Disposition":f'inline; filename="payment-evidence-{c.candidate_id}"'}
+    )
 
 @app.get("/api/candidates")
 def api_candidates():

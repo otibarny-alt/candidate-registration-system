@@ -199,3 +199,14 @@ IMPORTANT FOR EXISTING DATA:
 V1.10 does not automatically delete or merge duplicate records that were already created in older
 versions. Those records remain visible so an administrator can review and correct them safely.
 New duplicates are blocked from V1.10 onward.
+
+
+V1.11 — PAYMENT EVIDENCE IMAGE
+--------------------------------
+- Adds a required Payment Evidence image to new candidate applications.
+- Accepts validated JPG, PNG and WebP images up to 5 MB.
+- Stores payment evidence in PostgreSQL alongside the candidate record, so it survives redeployments.
+- Existing applications without evidence must upload it when next edited.
+- Logged-in administrators can open the saved evidence from the candidate list or edit screen.
+- The public candidate API does not expose or load payment-evidence images.
+- Existing databases are upgraded automatically with the new payment-evidence columns during deployment.
