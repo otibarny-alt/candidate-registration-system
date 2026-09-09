@@ -2,6 +2,7 @@
 <div class=top><b>Candidate Registration & Profile Portal</b>{% if self_service %}<a href=/candidate/logout>Candidate Logout</a>{% else %}<a href=/>Back to Candidates</a>{% endif %}</div>
 <div class=wrap><div class=card><h2>{{"Edit Candidate" if candidate else "Register Candidate"}}</h2>
 {% if self_service %}<div class="privacy-notice"><b>Private application:</b> You are viewing only your own candidate information.</div>{% endif %}
+{% if self_service and verified_member %}<div class="eligibility-notice"><b>Your verified voter area:</b> {{verified_member.county|replace('_',' ')|title}} · {{verified_member.constituency|replace('_',' ')|title}} · {{verified_member.ward|replace('_',' ')|title}}{% if verified_member.polling_station %}<br><b>Polling station:</b> {{verified_member.polling_station|replace('_',' ')|title}}{% endif %}<br><span>Governor, Senator and Woman Representative applications are restricted to this county; MNA to this constituency; and MCA to this ward. President is national.</span></div>{% endif %}
 {% if saved %}<div class="success">Your candidate application has been saved successfully. You may review and correct your information on this page.</div>{% endif %}
 {% if error %}<div class=error>{{error}}</div>{% endif %}
 <form method=post enctype=multipart/form-data id=candidateForm>
@@ -91,7 +92,9 @@
 <script>
 let H=null;
 const county=document.getElementById('county'), constituency=document.getElementById('constituency'), ward=document.getElementById('ward'), position=document.getElementById('position');
-const current={county:{{(candidate.county if candidate else '')|tojson}},constituency:{{(candidate.constituency if candidate else '')|tojson}},ward:{{(candidate.ward if candidate else '')|tojson}}};
+const selfService={{'true' if self_service else 'false'}};
+const eligible={county:{{(verified_member.county if verified_member else '')|tojson}},constituency:{{(verified_member.constituency if verified_member else '')|tojson}},ward:{{(verified_member.ward if verified_member else '')|tojson}}};
+const current={county:{{((verified_member.county if verified_member else '') if self_service else (candidate.county if candidate else ''))|tojson}},constituency:{{((verified_member.constituency if verified_member else '') if self_service else (candidate.constituency if candidate else ''))|tojson}},ward:{{((verified_member.ward if verified_member else '') if self_service else (candidate.ward if candidate else ''))|tojson}}};
 const norm=v=>(v||'').trim().toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
 function fill(el,rows,placeholder,selected){
  el.innerHTML='<option value="">'+placeholder+'</option>';
@@ -112,9 +115,19 @@ constituency.onchange=()=>{
  fill(ward,H.wards.filter(x=>norm(x.constituency_key)==norm(constituency.value)),'Select Ward','');
 };
 fetch('/api/hierarchy').then(r=>r.json()).then(d=>{
- H=d; fill(county,H.counties,'Select County',current.county);
- if(current.county){fill(constituency,H.constituencies.filter(x=>norm(x.county_key)==norm(current.county)),'Select Constituency',current.constituency);}
- if(current.constituency){fill(ward,H.wards.filter(x=>norm(x.constituency_key)==norm(current.constituency)),'Select Ward',current.ward);}
+ H=d;
+ const counties=selfService?H.counties.filter(x=>norm(x.name)==norm(eligible.county)):H.counties;
+ fill(county,counties,'Select County',current.county);
+ if(current.county){
+   let rows=H.constituencies.filter(x=>norm(x.county_key)==norm(current.county));
+   if(selfService)rows=rows.filter(x=>norm(x.name)==norm(eligible.constituency));
+   fill(constituency,rows,'Select Constituency',current.constituency);
+ }
+ if(current.constituency){
+   let rows=H.wards.filter(x=>norm(x.constituency_key)==norm(current.constituency));
+   if(selfService)rows=rows.filter(x=>norm(x.name)==norm(eligible.ward));
+   fill(ward,rows,'Select Ward',current.ward);
+ }
  applyScope();
 });
 

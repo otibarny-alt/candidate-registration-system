@@ -1,5 +1,5 @@
 
-# V1.12: separate administrator and private candidate access with ownership enforcement.
+# V1.13: bind non-presidential candidacy to the applicant's verified voter area.
 import os, csv, re, uuid, base64, hmac, time
 from io import BytesIO
 import requests
@@ -146,6 +146,57 @@ def hierarchy_payload():
       "wards":[{"name":r["name"],"label":r.get("label") or r["name"],"constituency_key":r.get("constituency_key","")} for r in rows if r.get("list_name")=="ward"],
     }
 
+def voter_geography_from_membership(row):
+    """Resolve a member's authoritative electoral area, preferring station code."""
+    county=first_value(row,"electorals_units/county","electorals_units/selected_county","electorals_units/county_name","county")
+    constituency=first_value(row,"electorals_units/constituency","electorals_units/selected_constituency","electorals_units/selected_constituency1","constituency")
+    ward=first_value(row,"electorals_units/ward","electorals_units/selected_ward","electorals_units/selected_ward1","ward")
+    station=first_value(row,"electorals_units/selected_poll_station1","electorals_units/poll_station_label","poll_station")
+    station_code=first_value(row,"electorals_units/selected_poll_station1_code","electorals_units/poll_station_code","poll_station_code")
+
+    rows=hierarchy_rows()
+    counties={norm(r.get("name")):r for r in rows if r.get("list_name")=="county"}
+    constituencies={norm(r.get("name")):r for r in rows if r.get("list_name")=="constituency"}
+    wards={norm(r.get("name")):r for r in rows if r.get("list_name")=="ward"}
+    stations=[r for r in rows if r.get("list_name")=="poll_station"]
+    matches=[]
+    code_digits=re.sub(r"\D+","",station_code)
+    if code_digits:
+        matches=[r for r in stations if re.sub(r"\D+","",str(r.get("poll_station_code") or ""))==code_digits]
+    if not matches and station:
+        matches=[r for r in stations if norm(r.get("name"))==norm(station) or norm(r.get("label"))==norm(station)]
+    # Direct Kobo geography safely disambiguates a repeated polling-station name.
+    if len(matches)>1 and ward:
+        matches=[r for r in matches if norm(r.get("ward_key"))==norm(ward)]
+    if len(matches)==1:
+        ward_row=wards.get(norm(matches[0].get("ward_key")),{})
+        constituency_row=constituencies.get(norm(ward_row.get("constituency_key")),{})
+        county_row=counties.get(norm(constituency_row.get("county_key")),{})
+        ward=ward_row.get("name") or ward
+        constituency=constituency_row.get("name") or constituency
+        county=county_row.get("name") or county
+    return {
+        "county":county,"constituency":constituency,"ward":ward,
+        "polling_station":station,"polling_station_code":station_code,
+        "geography_verified":bool(county and constituency and ward)
+    }
+
+def application_area_error(position,county,constituency,ward,member):
+    if position=="president":
+        return ""
+    voter_county=member.get("county","")
+    voter_constituency=member.get("constituency","")
+    voter_ward=member.get("ward","")
+    if not member.get("geography_verified"):
+        return "Your voter county, constituency and ward could not be verified from Membership Registration. Update the voter registration record before applying for a non-presidential position."
+    if norm(county)!=norm(voter_county):
+        return f"This application is not allowed. You are registered as a voter in {voter_county}, not {county or 'the selected county'}."
+    if position=="mna" and norm(constituency)!=norm(voter_constituency):
+        return f"This MNA application is not allowed. You are registered as a voter in {voter_constituency} Constituency."
+    if position=="mca" and (norm(constituency)!=norm(voter_constituency) or norm(ward)!=norm(voter_ward)):
+        return f"This MCA application is not allowed. You are registered as a voter in {voter_ward} Ward, {voter_constituency} Constituency."
+    return ""
+
 def position_scope(position):
     return dict((k,scope) for k,_,scope in POSITIONS).get(position,"national")
 
@@ -240,13 +291,15 @@ def lookup_membership(national_id):
         "membership_no"
     )
 
+    geography=voter_geography_from_membership(row)
     return {
         "national_id": first_value(row, "basics/national_id_no", "national_id_no") or str(national_id).strip(),
         "full_name": full_name,
         "phone": phone,
         "email": email,
         "membership_no": membership_no,
-        "submission_id": row.get("_id")
+        "submission_id": row.get("_id"),
+        **geography
     }
 
 
@@ -324,7 +377,7 @@ def candidate_access():
     _CANDIDATE_LOGIN_ATTEMPTS.pop(client_key,None)
     session.clear()
     session["candidate_national_id"]=national_id
-    session["candidate_member"]={k:str(member.get(k,"") or "") for k in ("national_id","full_name","phone","email","membership_no")}
+    session["candidate_member"]={k:(member.get(k,False) if k=="geography_verified" else str(member.get(k,"") or "")) for k in ("national_id","full_name","phone","email","membership_no","county","constituency","ward","polling_station","polling_station_code","geography_verified")}
     return redirect(url_for("candidate_home"))
 
 @app.get("/candidate/logout")
@@ -507,6 +560,10 @@ def save_candidate(c):
         return render_candidate_form_page(c,error="County and Constituency are required for MNA.")
     if scope=="ward" and (not c.county or not c.constituency or not c.ward):
         return render_candidate_form_page(c,error="County, Constituency and Ward are required for MCA.")
+
+    area_error=application_area_error(position,c.county,c.constituency,c.ward,member)
+    if area_error:
+        return render_candidate_form_page(c,error=area_error)
 
     cropped_photo=f.get("cropped_photo","").strip()
     if cropped_photo:

@@ -225,3 +225,18 @@ V1.12 — PRIVATE CANDIDATE SELF-SERVICE
 
 No new environment variables are required. Candidate access uses the existing
 KOBO_BASE_URL, MEMBERSHIP_ASSET_UID and KOBO_API_TOKEN connection.
+
+
+V1.13 — CANDIDATE VOTER-AREA ELIGIBILITY
+----------------------------------------
+- Resolves each candidate's registered county, constituency and ward from Kobo Membership Registration and county_main.csv.
+- Uses the polling-station code first, preventing confusion where polling-station names repeat in different counties.
+- Governor, Senator and Woman Representative applicants may apply only in their registered voter county.
+- MNA applicants may apply only in their registered voter constituency.
+- MCA applicants may apply only in their registered voter ward and constituency.
+- Presidential applicants may be registered voters anywhere in the country.
+- Candidate self-service lists only the applicant's eligible county, constituency and ward.
+- The server repeats all eligibility checks during every save, preventing browser or URL manipulation.
+- If voter geography cannot be verified unambiguously, non-presidential registration is blocked until the membership/voter record is corrected.
+
+No new environment variables are required.
