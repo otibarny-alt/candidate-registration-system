@@ -278,3 +278,9 @@ V1.15.2 — DECISION UPDATE CONFIRMATION
 - Changes the button to a blue, active “✕ Update” control when an administrator selects a different decision.
 - Returning the selector to its saved value restores “✓ Updated” without sending an unnecessary update.
 - Shows “Updating…” while a changed decision is being saved.
+
+V1.15.3 — REGISTRATION HEADER PRIVACY
+--------------------------------------
+
+- Removes the Back to Candidates link from the candidate registration and edit page header.
+- Candidate-list access remains available only through protected administrator navigation.

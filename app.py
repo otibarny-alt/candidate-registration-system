@@ -1,5 +1,5 @@
 
-# V1.15.2: clear saved/unsaved administrator decision controls.
+# V1.15.3: remove candidate-list navigation from registration form header.
 import os, csv, re, uuid, base64, hmac, time
 from io import BytesIO
 import requests

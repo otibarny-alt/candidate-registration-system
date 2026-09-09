@@ -1,5 +1,5 @@
 <!doctype html><link rel=stylesheet href=/static/style.css><meta name=viewport content="width=device-width,initial-scale=1">
-<div class=top><b>Candidate Registration & Profile Portal</b>{% if self_service %}<a href=/candidate/logout>Candidate Logout</a>{% else %}<a href=/>Back to Candidates</a>{% endif %}</div>
+<div class=top><b>Candidate Registration & Profile Portal</b>{% if self_service %}<a href=/candidate/logout>Candidate Logout</a>{% endif %}</div>
 <div class=wrap><div class=card><h2>{{"Edit Candidate" if candidate else "Register Candidate"}}</h2>
 {% if self_service %}<div class="privacy-notice"><b>Private application:</b> You are viewing only your own candidate information.</div>{% endif %}
 {% if self_service and candidate %}<div class="decision-notice decision-{{candidate.approval_status or 'pending'}}"><b>Application decision:</b> {{(candidate.approval_status or 'pending')|upper}}{% if (candidate.approval_status or 'pending') == 'pending' %} — your application is awaiting administrator review and is not yet included on the ballot.{% elif candidate.approval_status == 'approved' %} — your application is approved for inclusion on the ballot.{% else %} — your application is not included on the ballot.{% endif %}</div>{% endif %}
