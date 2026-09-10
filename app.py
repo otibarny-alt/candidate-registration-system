@@ -1,11 +1,11 @@
 
-# V1.20: status-based candidate editing with single-document corrections.
+# V1.21: status field locks and hierarchical admin candidate filters.
 import os, csv, re, uuid, base64, hmac, time, json
 from io import BytesIO, StringIO
 import requests
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response, abort
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect, text, func
 from sqlalchemy.orm import deferred
 from werkzeug.security import check_password_hash
 
@@ -560,10 +560,22 @@ def dashboard():
         if candidate_logged_in():
             return redirect(url_for("candidate_home"))
         return redirect(url_for("candidate_access"))
-    candidates=Candidate.query.order_by(Candidate.position,Candidate.county,Candidate.constituency,Candidate.ward,Candidate.full_name).all()
+    selected_filters={
+        "county":request.args.get("county","").strip()[:160],
+        "constituency":request.args.get("constituency","").strip()[:160],
+        "ward":request.args.get("ward","").strip()[:160],
+        "position":request.args.get("position","").strip()[:40],
+    }
+    query=Candidate.query
+    for field in ("county","constituency","ward","position"):
+        value=selected_filters[field]
+        if value:
+            query=query.filter(func.lower(getattr(Candidate,field))==value.lower())
+    candidates=query.order_by(Candidate.position,Candidate.county,Candidate.constituency,Candidate.ward,Candidate.full_name).all()
     state=portal_state()
     return render_template(
         "dashboard.html",candidates=candidates,positions=POSITIONS,state=state,
+        hierarchy=hierarchy_payload(),selected_filters=selected_filters,
         csrf_token=admin_csrf_token(),level2_configured=bool(LEVEL2_ADMIN_USERNAME and LEVEL2_ADMIN_PASSWORD_HASH),
         message=session.pop("candidate_admin_message",None),
         error=session.pop("candidate_admin_error",None)
@@ -618,11 +630,14 @@ def candidate_decision(candidate_id):
     auth=require_login()
     if auth:
         return auth
+    return_filters={key:request.form.get(key,"").strip()[:160] for key in ("county","constituency","ward","position")}
+    def return_to_filtered_dashboard():
+        return redirect(url_for("dashboard",**{key:value for key,value in return_filters.items() if value}))
     if not valid_admin_csrf():
         abort(400)
     if candidate_list_is_final():
         session["candidate_admin_error"]="The candidate list is FINAL. Application decisions cannot be changed until a Level 2 administrator unlocks it."
-        return redirect(url_for("dashboard"))
+        return return_to_filtered_dashboard()
     c=Candidate.query.get_or_404(candidate_id)
     decision=request.form.get("approval_status","").strip().lower()
     rejection_reason=request.form.get("rejection_reason","").strip().lower()
@@ -630,17 +645,17 @@ def candidate_decision(candidate_id):
         abort(400)
     if decision=="approved" and (not c.photo or not c.payment_evidence):
         session["candidate_admin_error"]="This application cannot be Accepted until both the candidate photo and payment evidence have been uploaded."
-        return redirect(url_for("dashboard"))
+        return return_to_filtered_dashboard()
     if decision=="rejected" and rejection_reason not in {"faulty_payment_evidence","improper_candidate_picture"}:
         session["candidate_admin_error"]="Select either Faulty payment evidence or Improper candidate picture before rejecting the application."
-        return redirect(url_for("dashboard"))
+        return return_to_filtered_dashboard()
     if candidate_list_is_final():
         session["candidate_admin_error"]="The candidate list became FINAL. The application decision was not changed."
-        return redirect(url_for("dashboard"))
+        return return_to_filtered_dashboard()
     c.approval_status=decision
     c.rejection_reason=rejection_reason if decision=="rejected" else None
     db.session.commit()
-    return redirect(url_for("dashboard"))
+    return return_to_filtered_dashboard()
 
 @app.get("/api/hierarchy")
 def api_hierarchy():

@@ -352,3 +352,12 @@ V1.20 — STATUS-BASED FIELD LOCKING
   correction. The server enforces the same rule even if a browser request is
   manually altered.
 - Submitting the permitted correction returns the application to Pending.
+V1.21 — ADMIN CANDIDATE LIST FILTERS
+
+- The admin list can be filtered by County, Constituency and Ward using
+  cascading options populated from county_main.csv.
+- A second-level Position Applied For filter supports President, Governor,
+  Senator, Woman Representative, MNA and MCA.
+- Geographic and position filters can be combined, cleared in one click and
+  remain selected after an administrator updates an application decision.
+- Filtering is performed by the server before the candidate rows are rendered.

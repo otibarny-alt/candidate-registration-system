@@ -54,6 +54,13 @@ input[readonly]{background:#f1f3f5}
 .review-only-cell{color:#59636e;font-weight:700;white-space:nowrap}
 .view-only-message{padding:13px 18px;border:2px solid #8b949e;border-radius:8px;background:#eef1f4;color:#3d4650;font-weight:800}
 input:disabled,select:disabled,textarea:disabled{cursor:not-allowed;opacity:.72;background:#e9edf1}
+.candidate-filters{display:grid;grid-template-columns:repeat(4,minmax(180px,1fr));gap:14px;align-items:end;margin:22px 0 12px;padding:18px;border:1px solid #ccd2d8;border-radius:12px;background:#f7f8fa}
+.candidate-filters label{display:block;font-weight:800;margin-bottom:7px}
+.candidate-filters select{width:100%}
+.candidate-filter-actions{grid-column:1/-1;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.filter-result-count{margin:0 0 18px;padding:11px 14px;border-left:5px solid #f58220;background:#fff4e9}
+@media(max-width:900px){.candidate-filters{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.candidate-filters{grid-template-columns:1fr}}
 .decision-form .rejection-reason{min-width:210px;background:#fff;color:#8a1511;border:1px solid #c82333}
 .rejection-reason-saved{display:block;margin-top:6px;font-weight:700;color:#8a1511}
 .decision-form button{margin:0;padding:9px 12px}

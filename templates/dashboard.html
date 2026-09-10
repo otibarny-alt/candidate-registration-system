@@ -4,6 +4,14 @@
 <div class=wrap><div class=card><div class=headrow><div><h2>Registered Candidates</h2><p class="muted admin-role-note">Administrators review applications and record an Accept or Reject decision. Candidates are responsible for their own details and document uploads.</p></div></div>
 {% if message %}<div class=success>{{message}}</div>{% endif %}
 {% if error %}<div class=error>{{error}}</div>{% endif %}
+<form method="get" action="{{url_for('dashboard')}}" class="candidate-filters">
+ <div><label for="filter_county">County</label><select id="filter_county" name="county"><option value="">All Counties</option></select></div>
+ <div><label for="filter_constituency">Constituency</label><select id="filter_constituency" name="constituency"><option value="">All Constituencies</option></select></div>
+ <div><label for="filter_ward">Ward</label><select id="filter_ward" name="ward"><option value="">All Wards</option></select></div>
+ <div><label for="filter_position">Position Applied For</label><select id="filter_position" name="position"><option value="">All Positions</option>{% for key,label,scope in positions %}<option value="{{key}}" {% if selected_filters.position==key %}selected{% endif %}>{{label}}</option>{% endfor %}</select></div>
+ <div class="candidate-filter-actions"><button type="submit">Apply Filters</button><a class="btn" href="{{url_for('dashboard')}}">Clear Filters</a></div>
+</form>
+<div class="filter-result-count"><b>{{candidates|length}}</b> candidate application(s) shown{% if selected_filters.county or selected_filters.constituency or selected_filters.ward or selected_filters.position %} for the selected filters{% endif %}.</div>
 {% if state.candidate_list_final %}
 <section class="central-lock central-lock-final">
  <h3>🔒 FINAL CANDIDATE LIST — ALL EDITING LOCKED</h3>
@@ -44,6 +52,31 @@
 {% else %}<tr><td colspan=9>No candidates registered yet.</td></tr>{% endfor %}
 </table></div></div>
 <script>
+const candidateHierarchy={{hierarchy|tojson}};
+const selectedCandidateFilters={{selected_filters|tojson}};
+const filterCounty=document.getElementById('filter_county');
+const filterConstituency=document.getElementById('filter_constituency');
+const filterWard=document.getElementById('filter_ward');
+const filterNorm=value=>(value||'').trim().toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
+function fillCandidateFilter(select,items,placeholder,selected){
+  select.innerHTML='';
+  const all=document.createElement('option');all.value='';all.textContent=placeholder;select.appendChild(all);
+  items.forEach(item=>{const option=document.createElement('option');option.value=item.name;option.textContent=item.label||item.name;if(filterNorm(item.name)===filterNorm(selected))option.selected=true;select.appendChild(option);});
+}
+function loadConstituencyFilters(selected){
+  const items=filterCounty.value?candidateHierarchy.constituencies.filter(item=>filterNorm(item.county_key)===filterNorm(filterCounty.value)):[];
+  fillCandidateFilter(filterConstituency,items,'All Constituencies',selected||'');
+}
+function loadWardFilters(selected){
+  const items=filterConstituency.value?candidateHierarchy.wards.filter(item=>filterNorm(item.constituency_key)===filterNorm(filterConstituency.value)):[];
+  fillCandidateFilter(filterWard,items,'All Wards',selected||'');
+}
+fillCandidateFilter(filterCounty,candidateHierarchy.counties,'All Counties',selectedCandidateFilters.county);
+loadConstituencyFilters(selectedCandidateFilters.constituency);
+loadWardFilters(selectedCandidateFilters.ward);
+filterCounty.addEventListener('change',()=>{loadConstituencyFilters('');loadWardFilters('');});
+filterConstituency.addEventListener('change',()=>loadWardFilters(''));
+
 document.querySelectorAll('.decision-form select[name="approval_status"]').forEach(function(select){
   const form=select.closest('.decision-form');
   const button=form.querySelector('button[type="submit"]');
@@ -64,6 +97,7 @@ document.querySelectorAll('.decision-form select[name="approval_status"]').forEa
   decision.addEventListener('change',refreshDecisionState);
   reason.addEventListener('change',refreshDecisionState);
   form.addEventListener('submit',function(){
+    Object.entries(selectedCandidateFilters).forEach(([name,value])=>{const input=document.createElement('input');input.type='hidden';input.name=name;input.value=value||'';form.appendChild(input);});
     button.disabled=true;
     button.classList.remove('decision-update-required');
     button.classList.add('decision-update-saving');
