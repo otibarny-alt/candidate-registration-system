@@ -45,6 +45,13 @@ input[readonly]{background:#f1f3f5}
 .cancel-edit-btn:hover,.cancel-edit-btn:focus{background:#fde8e7}
 .decision-form{display:flex;gap:6px;align-items:center;min-width:210px;flex-wrap:wrap}
 .decision-form select{min-width:120px}
+.candidate-form-heading{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:12px}
+.candidate-form-heading h2{margin:0}
+.status-login-link{background:#f58220;border:2px solid #111;color:#111;font-weight:800;box-shadow:0 5px 0 #111;text-align:center}
+.status-login-link:hover{background:#ff9d47;transform:translateY(1px);box-shadow:0 4px 0 #111}
+.status-login-link:active{background:#198f3c;color:#fff;transform:translateY(5px);box-shadow:none}
+.admin-role-note{max-width:850px;margin-top:4px}
+.review-only-cell{color:#59636e;font-weight:700;white-space:nowrap}
 .decision-form .rejection-reason{min-width:210px;background:#fff;color:#8a1511;border:1px solid #c82333}
 .rejection-reason-saved{display:block;margin-top:6px;font-weight:700;color:#8a1511}
 .decision-form button{margin:0;padding:9px 12px}

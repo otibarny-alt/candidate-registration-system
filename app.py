@@ -1,5 +1,5 @@
 
-# V1.18: private application status, rejection reasons and document resubmission.
+# V1.19: candidate status/edit link and strict administrator review-only access.
 import os, csv, re, uuid, base64, hmac, time, json
 from io import BytesIO, StringIO
 import requests
@@ -699,6 +699,9 @@ def api_member_lookup():
 
 @app.route("/candidate/new",methods=["GET","POST"])
 def candidate_new():
+    if logged_in():
+        session["candidate_admin_error"]="Candidate documents and application details must be submitted by the candidate. Administrators may only accept or reject applications."
+        return redirect(url_for("dashboard"))
     if not logged_in() and not candidate_logged_in():
         return redirect(url_for("candidate_access"))
     if candidate_logged_in() and not logged_in():
@@ -716,6 +719,9 @@ def candidate_new():
 
 @app.route("/candidate/<int:candidate_id>/edit",methods=["GET","POST"])
 def candidate_edit(candidate_id):
+    if logged_in():
+        session["candidate_admin_error"]="Administrators cannot edit candidate details or upload candidate documents. Use Application Decision to accept or reject the application."
+        return redirect(url_for("dashboard"))
     if not logged_in() and not candidate_logged_in():
         return redirect(url_for("candidate_access"))
     c=Candidate.query.get_or_404(candidate_id)
@@ -726,6 +732,8 @@ def candidate_edit(candidate_id):
     return save_candidate(c)
 
 def save_candidate(c):
+    if logged_in():
+        abort(403)
     if candidate_list_is_final():
         return render_candidate_form_page(c,error="The candidate list is FINAL. No application changes are permitted until a Level 2 administrator unlocks it."),423
     f=request.form

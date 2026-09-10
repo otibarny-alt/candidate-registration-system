@@ -327,3 +327,12 @@ V1.18 — CANDIDATE STATUS AND REJECTED-DOCUMENT RESUBMISSION
   administrator review; it never approves the application automatically.
 - The FINAL candidate-list lock continues to prevent all candidate and admin
   edits until a Level 2 administrator unlocks it.
+V1.19 — CANDIDATE SELF-SERVICE LINK AND ADMIN REVIEW-ONLY ROLE
+
+- The registration page has a prominent "Already registered? View Status / Edit
+  Application" link. Candidates sign in with National ID and registered phone.
+- Administrators can review applications and record Pending, Accepted or
+  Rejected decisions, including a rejection reason.
+- Administrator candidate creation, profile editing and document uploading are
+  blocked in both the interface and server routes. Candidate details, photos
+  and payment evidence must be submitted or corrected by the candidate.
