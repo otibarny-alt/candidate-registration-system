@@ -1,5 +1,5 @@
 
-# V1.21: status field locks and hierarchical admin candidate filters.
+# V1.22: separate public status and new-candidate registration entry pages.
 import os, csv, re, uuid, base64, hmac, time, json
 from io import BytesIO, StringIO
 import requests
@@ -529,11 +529,46 @@ def candidate_access():
     if not member or not registered_phone or not hmac.compare_digest(registered_phone,phone_key(phone)):
         record_candidate_login_failure(client_key)
         return render_template("candidate_access.html",error="The National ID and phone number do not match the membership record."),403
+    if not existing_candidate_for_national_id(national_id):
+        return render_template("candidate_access.html",error="No candidate application was found for this National ID. Use New Candidate Registration to submit a new application."),404
     _CANDIDATE_LOGIN_ATTEMPTS.pop(client_key,None)
     session.clear()
     session["candidate_national_id"]=national_id
     session["candidate_member"]={k:(member.get(k,False) if k=="geography_verified" else str(member.get(k,"") or "")) for k in ("national_id","full_name","phone","email","membership_no","county","constituency","ward","polling_station","polling_station_code","geography_verified")}
     return redirect(url_for("candidate_home"))
+
+@app.route("/candidate/register",methods=["GET","POST"])
+def candidate_register():
+    if request.method=="GET":
+        return render_template("candidate_register.html")
+    client_key=request.headers.get("X-Forwarded-For",request.remote_addr or "").split(",")[0].strip()
+    if candidate_login_rate_limited(client_key):
+        return render_template("candidate_register.html",error="Too many unsuccessful attempts. Please wait 15 minutes before trying again."),429
+    national_id=request.form.get("national_id","").strip()
+    phone=request.form.get("phone","").strip()
+    if not national_id.isdigit() or not phone_key(phone):
+        record_candidate_login_failure(client_key)
+        return render_template("candidate_register.html",error="Enter a valid National ID and registered phone number."),400
+    try:
+        member=lookup_membership(national_id)
+    except requests.RequestException:
+        return render_template("candidate_register.html",error="Unable to contact the membership lookup sources. Please try again."),502
+    except RuntimeError as exc:
+        return render_template("candidate_register.html",error=str(exc)),500
+    registered_phone=phone_key((member or {}).get("phone",""))
+    if not member or not registered_phone or not hmac.compare_digest(registered_phone,phone_key(phone)):
+        record_candidate_login_failure(client_key)
+        return render_template("candidate_register.html",error="The National ID and phone number do not match the membership record."),403
+    existing=existing_candidate_for_national_id(national_id)
+    if existing:
+        return render_template("candidate_register.html",error=f"This National ID already has candidate application {existing.candidate_id}. Use View Application Status to open it."),409
+    if candidate_list_is_final():
+        return render_template("candidate_list_final.html"),423
+    _CANDIDATE_LOGIN_ATTEMPTS.pop(client_key,None)
+    session.clear()
+    session["candidate_national_id"]=national_id
+    session["candidate_member"]={k:(member.get(k,False) if k=="geography_verified" else str(member.get(k,"") or "")) for k in ("national_id","full_name","phone","email","membership_no","county","constituency","ward","polling_station","polling_station_code","geography_verified")}
+    return redirect(url_for("candidate_new"))
 
 @app.get("/candidate/logout")
 def candidate_logout():
@@ -547,7 +582,7 @@ def candidate_home():
     existing=existing_candidate_for_national_id(candidate_session_national_id())
     if existing:
         return redirect(url_for("candidate_edit",candidate_id=existing.id))
-    return redirect(url_for("candidate_new"))
+    return redirect(url_for("candidate_register"))
 
 @app.get("/logout")
 def logout():
@@ -719,10 +754,9 @@ def candidate_new():
         # entering candidate registration switches to the private candidate
         # identity flow instead of bouncing back to the admin dashboard.
         session.clear()
-        session["candidate_entry_message"]="Enter the candidate's National ID and registered phone number to start a new application or open an existing one."
-        return redirect(url_for("candidate_access"))
+        return redirect(url_for("candidate_register"))
     if not logged_in() and not candidate_logged_in():
-        return redirect(url_for("candidate_access"))
+        return redirect(url_for("candidate_register"))
     if candidate_logged_in() and not logged_in():
         existing=existing_candidate_for_national_id(candidate_session_national_id())
         if existing:

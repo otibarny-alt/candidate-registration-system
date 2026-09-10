@@ -361,3 +361,13 @@ V1.21 — ADMIN CANDIDATE LIST FILTERS
 - Geographic and position filters can be combined, cleared in one click and
   remain selected after an administrator updates an application decision.
 - Filtering is performed by the server before the candidate rows are rendered.
+V1.22 — INDEPENDENT NEW-CANDIDATE REGISTRATION PAGE
+
+- Removed Administrator Login from the public candidate-status page.
+- Added New Candidate Registration linking to an independent registration
+  identity-verification page.
+- Candidate status access now opens existing applications only. If none exists,
+  the user is directed to New Candidate Registration.
+- New registration blocks National IDs that already have an application and
+  directs them back to private status access.
+- Administrator login remains available only through the admin URL.

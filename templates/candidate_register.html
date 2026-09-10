@@ -1,0 +1,14 @@
+<!doctype html><link rel=stylesheet href=/static/style.css><meta name=viewport content="width=device-width,initial-scale=1">
+<div class=top><b>Candidate Registration &amp; Profile Portal</b><a href="{{url_for('candidate_access')}}">View Application Status</a></div>
+<div class=demo>NEW CANDIDATE REGISTRATION</div>
+<div class=wrap><div class="card narrow">
+<h2>Start a New Candidate Application</h2>
+<p>Enter your National ID and the phone number registered in ODM Membership Registration. After your identity is confirmed, the new application form will open.</p>
+{% if error %}<div class=error>{{error}}</div>{% endif %}
+<form method=post>
+<label>National ID</label><input name=national_id inputmode=numeric autocomplete=off required>
+<label>Registered Phone Number</label><input name=phone type=tel autocomplete=tel required>
+<button>Verify and Start Registration</button>
+</form>
+<p class=muted>Only verified ODM members without an existing candidate application can start a new registration.</p>
+</div></div>
