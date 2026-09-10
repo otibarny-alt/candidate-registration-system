@@ -1,9 +1,12 @@
 <!doctype html><link rel=stylesheet href=/static/style.css><meta name=viewport content="width=device-width,initial-scale=1">
+{% set existing_candidate = self_service and candidate %}
+{% set correction_photo = existing_candidate and candidate.approval_status=='rejected' and candidate.rejection_reason=='improper_candidate_picture' %}
+{% set correction_payment = existing_candidate and candidate.approval_status=='rejected' and candidate.rejection_reason=='faulty_payment_evidence' %}
 <div class=top><b>Candidate Registration & Profile Portal</b>{% if self_service %}<a href=/candidate/logout>Candidate Logout</a>{% endif %}</div>
 <div class=wrap><div class=card><div class="candidate-form-heading"><h2>{{"Edit Candidate" if candidate else "Register Candidate"}}</h2>{% if not candidate %}<a class="btn status-login-link" href="{{url_for('candidate_access')}}">Already registered? View Status / Edit Application</a>{% endif %}</div>
 {% if self_service %}<div class="privacy-notice"><b>Private application:</b> You are viewing only your own candidate information.</div>{% endif %}
 {% if list_locked %}<div class="central-lock central-lock-final"><h3>🔒 FINAL CANDIDATE LIST — EDITING LOCKED</h3><p>This application is available for viewing only. No changes can be saved unless a Level 2 administrator unlocks the candidate list.</p></div>{% endif %}
-{% if self_service and candidate %}<div class="decision-notice decision-{{candidate.approval_status or 'pending'}}"><b>Application status:</b> {% if candidate.approval_status=='approved' %}ACCEPTED{% elif candidate.approval_status=='rejected' %}REJECTED{% else %}PENDING APPROVAL{% endif %}{% if (candidate.approval_status or 'pending') == 'pending' %} — your application is awaiting administrator review and is not yet included on the ballot.{% elif candidate.approval_status == 'approved' %} — your application is accepted for inclusion on the ballot.{% else %} — your application is not included on the ballot.<br><b>Reason for rejection:</b> {% if candidate.rejection_reason=='faulty_payment_evidence' %}Faulty payment evidence{% elif candidate.rejection_reason=='improper_candidate_picture' %}Improper candidate picture{% else %}Contact the candidate registration administrator{% endif %}. Upload a fresh corrected document below and save to resubmit the application for approval.{% endif %}</div>{% endif %}
+{% if self_service and candidate %}<div class="decision-notice decision-{{candidate.approval_status or 'pending'}}"><b>Application status:</b> {% if candidate.approval_status=='approved' %}ACCEPTED{% elif candidate.approval_status=='rejected' %}REJECTED{% else %}PENDING APPROVAL{% endif %}{% if (candidate.approval_status or 'pending') == 'pending' %} — your application is awaiting administrator review. All fields are locked.{% elif candidate.approval_status == 'approved' %} — your application is accepted for inclusion on the ballot. All fields are locked.{% else %} — your application is not included on the ballot.<br><b>Reason for rejection:</b> {% if candidate.rejection_reason=='faulty_payment_evidence' %}Faulty payment evidence. Only Payment Evidence is open for correction.{% elif candidate.rejection_reason=='improper_candidate_picture' %}Improper candidate picture. Only Candidate Photo is open for correction.{% else %}Contact the candidate registration administrator. No field is open until a valid reason is recorded{% endif %}.{% endif %}</div>{% endif %}
 {% if self_service and verified_member.geography_verified %}<div class="eligibility-notice"><b>Your verified voter area:</b> {{verified_member.county|replace('_',' ')|title}} · {{verified_member.constituency|replace('_',' ')|title}} · {{verified_member.ward|replace('_',' ')|title}}{% if verified_member.polling_station %}<br><b>Polling station:</b> {{verified_member.polling_station|replace('_',' ')|title}}{% endif %}<br><span>Governor, Senator and Woman Representative applications are restricted to this county; MNA to this constituency; and MCA to this ward. President is national.</span></div>{% elif self_service %}<div class="error">Your voter area could not be refreshed. Please log out and sign in again before editing a non-presidential application.</div>{% endif %}
 {% if saved %}<div class="success">Your candidate application has been saved successfully. You may review and correct your information on this page.</div>{% endif %}
 {% if error %}<div class=error>{{error}}</div>{% endif %}
@@ -34,20 +37,20 @@
 <div><label>Membership No.</label><input id="membership_no" name=membership_no readonly value="{{candidate.membership_no if candidate else (verified_member.membership_no if verified_member else '')}}"><small class="muted">Pulled from Kobo.</small></div>
 
 <div><label>Position Applied For</label>
-<select name=position id=position required>
+<select name=position id=position required {% if existing_candidate %}disabled{% endif %}>
 <option value="">Select position</option>
 {% for key,label,scope in positions %}<option value="{{key}}" data-scope="{{scope}}" {% if candidate and candidate.position==key %}selected{% endif %}>{{label}}</option>{% endfor %}
 </select></div>
 {% if not self_service %}<div><label>Record Status</label><select name=status><option value=active {% if not candidate or candidate.status=="active" %}selected{% endif %}>Active</option><option value=inactive {% if candidate and candidate.status=="inactive" %}selected{% endif %}>Inactive</option></select></div>
 <div><label>Application Decision</label><select name=approval_status><option value=pending {% if not candidate or (candidate.approval_status or 'pending')=='pending' %}selected{% endif %}>Pending Review</option><option value=approved {% if candidate and candidate.approval_status=='approved' %}selected{% endif %}>Accepted — Include on Ballot</option><option value=rejected {% if candidate and candidate.approval_status=='rejected' %}selected{% endif %}>Rejected — Exclude from Ballot</option></select></div>
 <div><label>Rejection Reason</label><select name=rejection_reason><option value="">Select when rejected</option><option value="faulty_payment_evidence" {% if candidate and candidate.rejection_reason=='faulty_payment_evidence' %}selected{% endif %}>Faulty payment evidence</option><option value="improper_candidate_picture" {% if candidate and candidate.rejection_reason=='improper_candidate_picture' %}selected{% endif %}>Improper candidate picture</option></select></div>{% endif %}
-<div id=countyBox><label>County</label><select name=county id=county><option value="">Select County</option></select></div>
-<div id=constBox><label>Constituency</label><select name=constituency id=constituency><option value="">Select Constituency</option></select></div>
-<div id=wardBox><label>Ward</label><select name=ward id=ward><option value="">Select Ward</option></select></div>
+<div id=countyBox><label>County</label><select name=county id=county {% if existing_candidate %}disabled{% endif %}><option value="">Select County</option></select></div>
+<div id=constBox><label>Constituency</label><select name=constituency id=constituency {% if existing_candidate %}disabled{% endif %}><option value="">Select Constituency</option></select></div>
+<div id=wardBox><label>Ward</label><select name=ward id=ward {% if existing_candidate %}disabled{% endif %}><option value="">Select Ward</option></select></div>
 <div class="candidate-photo-field">
 <label>Candidate Photo</label>
-<input type="file" id="photo_input" accept="image/jpeg,image/png,image/webp,image/*" {% if not candidate or not candidate.photo %}required{% endif %}>
-<small class="muted">Required. Select an image, crop it and click “Crop &amp; Use Photo” before saving.</small>
+<input type="file" id="photo_input" accept="image/jpeg,image/png,image/webp,image/*" {% if existing_candidate and not correction_photo %}disabled{% endif %} {% if not candidate or not candidate.photo or correction_photo %}required{% endif %}>
+<small class="muted">{% if correction_photo %}Open for correction: select and crop a fresh candidate photo.{% elif existing_candidate %}Candidate photo is locked for this application status.{% else %}Required. Select an image, crop it and click “Crop &amp; Use Photo” before saving.{% endif %}</small>
 <input type="hidden" name="cropped_photo" id="cropped_photo">
 
 <div id="cropper_wrap" class="cropper-wrap" hidden>
@@ -82,8 +85,8 @@
 </div>
 <div class="payment-evidence-field">
 <label for="payment_evidence">Payment Evidence</label>
-<input type="file" id="payment_evidence" name="payment_evidence" accept="image/jpeg,image/png,image/webp" {% if not candidate or not candidate.payment_evidence %}required{% endif %}>
-<small class="muted">Required image evidence. Accepted formats: JPG, PNG or WebP; maximum size 5 MB.</small>
+<input type="file" id="payment_evidence" name="payment_evidence" accept="image/jpeg,image/png,image/webp" {% if existing_candidate and not correction_payment %}disabled{% endif %} {% if not candidate or not candidate.payment_evidence or correction_payment %}required{% endif %}>
+<small class="muted">{% if correction_payment %}Open for correction: upload fresh payment evidence.{% elif existing_candidate %}Payment evidence is locked for this application status.{% else %}Required image evidence. Accepted formats: JPG, PNG or WebP; maximum size 5 MB.{% endif %}</small>
 {% if candidate and candidate.payment_evidence %}
 <div class="existing-photo-wrap">
   <span class="muted">Current payment evidence is saved.</span>
@@ -91,9 +94,9 @@
 </div>
 {% endif %}
 </div>
-<label>Short Biography</label><textarea name=bio rows=7 placeholder="Candidate biography, experience, priorities, etc.">{{candidate.bio if candidate else ''}}</textarea>
+<label>Short Biography</label><textarea name=bio rows=7 placeholder="Candidate biography, experience, priorities, etc." {% if existing_candidate %}disabled{% endif %}>{{candidate.bio if candidate else ''}}</textarea>
 {% if not list_locked %}<div class="form-actions">
-  <button type="submit">Save Candidate</button>
+  {% if not existing_candidate %}<button type="submit">Save Candidate</button>{% elif correction_photo %}<button type="submit">Submit Corrected Candidate Photo</button>{% elif correction_payment %}<button type="submit">Submit Corrected Payment Evidence</button>{% else %}<span class="view-only-message">No fields are open for editing.</span>{% endif %}
   <a class="btn cancel-edit-btn" href="{{ url_for('candidate_home') if self_service else url_for('dashboard') }}">Cancel Edit</a>
 </div>{% endif %}
 </fieldset></form></div></div>

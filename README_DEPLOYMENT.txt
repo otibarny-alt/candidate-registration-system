@@ -343,3 +343,12 @@ V1.19.1 — ADMIN-SESSION CANDIDATE ENTRY FIX
   back to the administrator dashboard.
 - After verification, a first-time candidate receives the new application form;
   an already registered candidate receives only their own status/edit page.
+V1.20 — STATUS-BASED FIELD LOCKING
+
+- Pending and Accepted applications are completely view-only.
+- A rejection for Faulty payment evidence opens only Payment Evidence.
+- A rejection for Improper candidate picture opens only Candidate Photo.
+- Candidate particulars and the unrelated document remain locked during every
+  correction. The server enforces the same rule even if a browser request is
+  manually altered.
+- Submitting the permitted correction returns the application to Pending.

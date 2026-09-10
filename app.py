@@ -1,5 +1,5 @@
 
-# V1.19.1: candidate entry works even when the browser has an admin session.
+# V1.20: status-based candidate editing with single-document corrections.
 import os, csv, re, uuid, base64, hmac, time, json
 from io import BytesIO, StringIO
 import requests
@@ -740,6 +740,49 @@ def save_candidate(c):
         abort(403)
     if candidate_list_is_final():
         return render_candidate_form_page(c,error="The candidate list is FINAL. No application changes are permitted until a Level 2 administrator unlocks it."),423
+
+    # Once submitted, the application particulars are immutable. Pending and
+    # accepted applications are view-only. A rejected candidate may replace
+    # only the exact document identified by the administrator; no posted form
+    # value can alter their name, position, area, biography or other document.
+    if c is not None and candidate_logged_in():
+        if c.approval_status in {"pending","approved"}:
+            return render_candidate_form_page(c,error="This application is view-only while its status is Pending or Accepted. No fields can be changed."),423
+        if c.approval_status!="rejected":
+            return render_candidate_form_page(c,error="This application is not open for editing."),423
+
+        if c.rejection_reason=="faulty_payment_evidence":
+            try:
+                payment_data,payment_mime=validated_image_upload(request.files.get("payment_evidence"),"Payment Evidence")
+            except ValueError as exc:
+                return render_candidate_form_page(c,error=str(exc))
+            if not payment_data:
+                return render_candidate_form_page(c,error="Upload fresh Payment Evidence before resubmitting this rejected application.")
+            c.payment_evidence=payment_data
+            c.payment_evidence_mime=payment_mime
+        elif c.rejection_reason=="improper_candidate_picture":
+            cropped_photo=request.form.get("cropped_photo","").strip()
+            if not cropped_photo:
+                return render_candidate_form_page(c,error="Select, crop and confirm a fresh Candidate Photo before resubmitting this rejected application.")
+            try:
+                header,encoded=cropped_photo.split(",",1)
+                if not header.startswith("data:image/"):
+                    raise ValueError("Invalid image data")
+                c.photo=base64.b64decode(encoded)
+                c.photo_mime="image/jpeg"
+            except Exception:
+                return render_candidate_form_page(c,error="The corrected candidate photo could not be processed. Please select and crop the image again.")
+        else:
+            return render_candidate_form_page(c,error="The administrator must record a valid rejection reason before a correction can be submitted."),423
+
+        if candidate_list_is_final():
+            db.session.rollback()
+            return render_candidate_form_page(c,error="The candidate list became FINAL while this correction was open. Your document was not saved."),423
+        c.approval_status="pending"
+        c.rejection_reason=None
+        db.session.commit()
+        return redirect(url_for("candidate_edit",candidate_id=c.id,saved=1))
+
     f=request.form
     position=f.get("position","").strip()
     scope=position_scope(position)
