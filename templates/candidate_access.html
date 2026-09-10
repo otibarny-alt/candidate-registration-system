@@ -3,6 +3,7 @@
 <div class=demo>PRIVATE CANDIDATE ACCESS</div>
 <div class=wrap><div class="card narrow"><h2>Check Application Status or Open Your Application</h2>
 <p>Enter your National ID and the phone number registered in ODM Membership Registration. Your private page will show whether the application is Pending, Accepted or Rejected.</p>
+{% if message %}<div class=success>{{message}}</div>{% endif %}
 {% if error %}<div class=error>{{error}}</div>{% endif %}
 <form method=post>
 <label>National ID</label><input name=national_id inputmode=numeric autocomplete=off required>

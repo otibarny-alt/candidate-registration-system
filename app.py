@@ -1,5 +1,5 @@
 
-# V1.19: candidate status/edit link and strict administrator review-only access.
+# V1.19.1: candidate entry works even when the browser has an admin session.
 import os, csv, re, uuid, base64, hmac, time, json
 from io import BytesIO, StringIO
 import requests
@@ -510,7 +510,7 @@ def login_post():
 @app.route("/candidate-access",methods=["GET","POST"])
 def candidate_access():
     if request.method=="GET":
-        return render_template("candidate_access.html")
+        return render_template("candidate_access.html",message=session.pop("candidate_entry_message",None))
     client_key=request.headers.get("X-Forwarded-For",request.remote_addr or "").split(",")[0].strip()
     if candidate_login_rate_limited(client_key):
         return render_template("candidate_access.html",error="Too many unsuccessful attempts. Please wait 15 minutes before trying again."),429
@@ -700,8 +700,12 @@ def api_member_lookup():
 @app.route("/candidate/new",methods=["GET","POST"])
 def candidate_new():
     if logged_in():
-        session["candidate_admin_error"]="Candidate documents and application details must be submitted by the candidate. Administrators may only accept or reject applications."
-        return redirect(url_for("dashboard"))
+        # A shared browser may still carry the administrator cookie. Explicitly
+        # entering candidate registration switches to the private candidate
+        # identity flow instead of bouncing back to the admin dashboard.
+        session.clear()
+        session["candidate_entry_message"]="Enter the candidate's National ID and registered phone number to start a new application or open an existing one."
+        return redirect(url_for("candidate_access"))
     if not logged_in() and not candidate_logged_in():
         return redirect(url_for("candidate_access"))
     if candidate_logged_in() and not logged_in():

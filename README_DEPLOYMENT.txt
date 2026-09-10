@@ -336,3 +336,10 @@ V1.19 — CANDIDATE SELF-SERVICE LINK AND ADMIN REVIEW-ONLY ROLE
 - Administrator candidate creation, profile editing and document uploading are
   blocked in both the interface and server routes. Candidate details, photos
   and payment evidence must be submitted or corrected by the candidate.
+V1.19.1 — ADMIN-SESSION CANDIDATE ENTRY FIX
+
+- Opening /candidate/new while an administrator is signed in now switches to
+  the private National ID and phone verification page instead of redirecting
+  back to the administrator dashboard.
+- After verification, a first-time candidate receives the new application form;
+  an already registered candidate receives only their own status/edit page.
