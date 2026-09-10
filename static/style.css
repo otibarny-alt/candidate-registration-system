@@ -43,8 +43,10 @@ input[readonly]{background:#f1f3f5}
 .form-actions button,.form-actions .btn{margin-top:0;min-width:180px;text-align:center;font-weight:700}
 .cancel-edit-btn{background:#fff;color:#8a1511;border:2px solid #8a1511}
 .cancel-edit-btn:hover,.cancel-edit-btn:focus{background:#fde8e7}
-.decision-form{display:flex;gap:6px;align-items:center;min-width:210px}
+.decision-form{display:flex;gap:6px;align-items:center;min-width:210px;flex-wrap:wrap}
 .decision-form select{min-width:120px}
+.decision-form .rejection-reason{min-width:210px;background:#fff;color:#8a1511;border:1px solid #c82333}
+.rejection-reason-saved{display:block;margin-top:6px;font-weight:700;color:#8a1511}
 .decision-form button{margin:0;padding:9px 12px}
 .decision-state-pending select{background:#f58220;color:#111;border:1px solid #c95e00;font-weight:700}
 .decision-state-approved select{background:#218838;color:#fff;border:1px solid #176b2a;font-weight:700}

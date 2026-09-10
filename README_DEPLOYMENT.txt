@@ -313,3 +313,17 @@ constituency, ward and polling station used by the existing application restrict
 Optional Render variables:
 MEMBERSHIP_CSV_FILENAME=membership_registration.csv
 MEMBERSHIP_CSV_CACHE_SECONDS=300
+V1.18 — CANDIDATE STATUS AND REJECTED-DOCUMENT RESUBMISSION
+
+- Candidates use the private Candidate Access page and verify their National ID
+  with the phone number held in membership registration.
+- Their own application then clearly shows Pending Approval, Accepted or
+  Rejected. No candidate list or another applicant's data is exposed.
+- An administrator must select a rejection reason: Faulty payment evidence or
+  Improper candidate picture.
+- A rejected candidate can upload the specified replacement document and Save,
+  or leave without changing anything by using Cancel Edit / Cancel Photo Change.
+- A valid correction returns the application to Pending Approval for a fresh
+  administrator review; it never approves the application automatically.
+- The FINAL candidate-list lock continues to prevent all candidate and admin
+  edits until a Level 2 administrator unlocks it.

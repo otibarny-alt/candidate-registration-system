@@ -1,5 +1,5 @@
 
-# V1.16.1: require candidate photo and payment evidence before acceptance.
+# V1.18: private application status, rejection reasons and document resubmission.
 import os, csv, re, uuid, base64, hmac, time, json
 from io import BytesIO, StringIO
 import requests
@@ -68,6 +68,7 @@ class Candidate(db.Model):
     payment_evidence_mime=db.Column(db.String(80))
     status=db.Column(db.String(20),default="active",nullable=False,index=True)
     approval_status=db.Column(db.String(20),default="pending",nullable=False,index=True)
+    rejection_reason=db.Column(db.String(80))
 
 class PortalState(db.Model):
     id=db.Column(db.Integer,primary_key=True)
@@ -87,6 +88,8 @@ with app.app_context():
         db.session.execute(text("ALTER TABLE candidate ADD COLUMN payment_evidence_mime VARCHAR(80)"))
     if "approval_status" not in candidate_columns:
         db.session.execute(text("ALTER TABLE candidate ADD COLUMN approval_status VARCHAR(20) NOT NULL DEFAULT 'pending'"))
+    if "rejection_reason" not in candidate_columns:
+        db.session.execute(text("ALTER TABLE candidate ADD COLUMN rejection_reason VARCHAR(80)"))
     if db.session.get(PortalState,1) is None:
         db.session.add(PortalState(id=1,candidate_list_final=False))
     # Older incomplete records must be reviewed again and cannot remain accepted.
@@ -622,15 +625,20 @@ def candidate_decision(candidate_id):
         return redirect(url_for("dashboard"))
     c=Candidate.query.get_or_404(candidate_id)
     decision=request.form.get("approval_status","").strip().lower()
+    rejection_reason=request.form.get("rejection_reason","").strip().lower()
     if decision not in {"pending","approved","rejected"}:
         abort(400)
     if decision=="approved" and (not c.photo or not c.payment_evidence):
         session["candidate_admin_error"]="This application cannot be Accepted until both the candidate photo and payment evidence have been uploaded."
         return redirect(url_for("dashboard"))
+    if decision=="rejected" and rejection_reason not in {"faulty_payment_evidence","improper_candidate_picture"}:
+        session["candidate_admin_error"]="Select either Faulty payment evidence or Improper candidate picture before rejecting the application."
+        return redirect(url_for("dashboard"))
     if candidate_list_is_final():
         session["candidate_admin_error"]="The candidate list became FINAL. The application decision was not changed."
         return redirect(url_for("dashboard"))
     c.approval_status=decision
+    c.rejection_reason=rejection_reason if decision=="rejected" else None
     db.session.commit()
     return redirect(url_for("dashboard"))
 
@@ -785,6 +793,10 @@ def save_candidate(c):
     if logged_in():
         decision=f.get("approval_status",c.approval_status or "pending").strip().lower()
         c.approval_status=decision if decision in {"pending","approved","rejected"} else "pending"
+        rejection_reason=f.get("rejection_reason",c.rejection_reason or "").strip().lower()
+        if c.approval_status=="rejected" and rejection_reason not in {"faulty_payment_evidence","improper_candidate_picture"}:
+            return render_candidate_form_page(c,error="Select a rejection reason before rejecting this application.")
+        c.rejection_reason=rejection_reason if c.approval_status=="rejected" else None
     elif is_new:
         c.approval_status="pending"
 
@@ -826,6 +838,17 @@ def save_candidate(c):
         c.payment_evidence_mime=payment_mime
     elif not c.payment_evidence:
         return render_candidate_form_page(c,error="Payment Evidence is required. Upload a clear JPG, PNG or WebP image before saving the candidate.")
+
+    # A rejected candidate may correct only the document identified by the
+    # administrator. A valid replacement resubmits the application for review;
+    # it never approves the candidate automatically.
+    if candidate_logged_in() and not logged_in() and c.approval_status=="rejected":
+        if c.rejection_reason=="faulty_payment_evidence" and not payment_data:
+            return render_candidate_form_page(c,error="Upload fresh Payment Evidence before resubmitting this rejected application.")
+        if c.rejection_reason=="improper_candidate_picture" and not cropped_photo:
+            return render_candidate_form_page(c,error="Select, crop and confirm a fresh Candidate Photo before resubmitting this rejected application.")
+        c.approval_status="pending"
+        c.rejection_reason=None
 
     if candidate_list_is_final():
         db.session.rollback()

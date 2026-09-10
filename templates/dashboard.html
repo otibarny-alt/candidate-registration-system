@@ -39,31 +39,36 @@
 <td>{% if c.payment_evidence %}<a href="/payment-evidence/{{c.id}}" target="_blank" rel="noopener">View Image</a>{% else %}<span class=muted>Not uploaded</span>{% endif %}</td>
 <td>{{c.status}}</td>
 <td>{% if state.candidate_list_final %}<span class="locked-cell">🔒 Locked</span>{% else %}<a href="/candidate/{{c.id}}/edit">Edit</a>{% endif %}</td>
-<td>{% if state.candidate_list_final %}<span class="decision-badge decision-badge-{{c.approval_status or 'pending'}}">{% if c.approval_status=='approved' %}Accepted{% elif c.approval_status=='rejected' %}Rejected{% else %}Pending{% endif %}</span>{% else %}<form method="post" action="/candidate/{{c.id}}/decision" class="decision-form decision-state-{{c.approval_status or 'pending'}}"><input type="hidden" name="csrf_token" value="{{csrf_token}}"><select name="approval_status" data-saved-value="{{c.approval_status or 'pending'}}" aria-label="Application decision for {{c.full_name}}"><option value="pending" {% if (c.approval_status or 'pending')=='pending' %}selected{% endif %}>Pending</option><option value="approved" {% if c.approval_status=='approved' %}selected{% endif %} {% if not c.photo or not c.payment_evidence %}disabled{% endif %}>Accepted</option><option value="rejected" {% if c.approval_status=='rejected' %}selected{% endif %}>Rejected</option></select><button type="submit" class="decision-update-saved" disabled>✓ Updated</button>{% if not c.photo or not c.payment_evidence %}<span class="incomplete-application">Photo and payment evidence required</span>{% endif %}</form>{% endif %}</td>
+<td>{% if state.candidate_list_final %}<span class="decision-badge decision-badge-{{c.approval_status or 'pending'}}">{% if c.approval_status=='approved' %}Accepted{% elif c.approval_status=='rejected' %}Rejected{% else %}Pending{% endif %}</span>{% if c.approval_status=='rejected' %}<small class="rejection-reason-saved">{% if c.rejection_reason=='faulty_payment_evidence' %}Faulty payment evidence{% elif c.rejection_reason=='improper_candidate_picture' %}Improper candidate picture{% endif %}</small>{% endif %}{% else %}<form method="post" action="/candidate/{{c.id}}/decision" class="decision-form decision-state-{{c.approval_status or 'pending'}}"><input type="hidden" name="csrf_token" value="{{csrf_token}}"><select name="approval_status" data-saved-value="{{c.approval_status or 'pending'}}" aria-label="Application decision for {{c.full_name}}"><option value="pending" {% if (c.approval_status or 'pending')=='pending' %}selected{% endif %}>Pending</option><option value="approved" {% if c.approval_status=='approved' %}selected{% endif %} {% if not c.photo or not c.payment_evidence %}disabled{% endif %}>Accepted</option><option value="rejected" {% if c.approval_status=='rejected' %}selected{% endif %}>Rejected</option></select><select name="rejection_reason" class="rejection-reason" data-saved-value="{{c.rejection_reason or ''}}" aria-label="Rejection reason for {{c.full_name}}"><option value="">Select rejection reason</option><option value="faulty_payment_evidence" {% if c.rejection_reason=='faulty_payment_evidence' %}selected{% endif %}>Faulty payment evidence</option><option value="improper_candidate_picture" {% if c.rejection_reason=='improper_candidate_picture' %}selected{% endif %}>Improper candidate picture</option></select><button type="submit" class="decision-update-saved" disabled>✓ Updated</button>{% if not c.photo or not c.payment_evidence %}<span class="incomplete-application">Photo and payment evidence required</span>{% endif %}</form>{% endif %}</td>
 </tr>
 {% else %}<tr><td colspan=9>No candidates registered yet.</td></tr>{% endfor %}
 </table></div></div>
 <script>
-document.querySelectorAll('.decision-form select').forEach(function(select){
+document.querySelectorAll('.decision-form select[name="approval_status"]').forEach(function(select){
   const form=select.closest('.decision-form');
   const button=form.querySelector('button[type="submit"]');
+  const decision=form.querySelector('select[name="approval_status"]');
+  const reason=form.querySelector('select[name="rejection_reason"]');
   function refreshDecisionState(){
-    const form=select.closest('.decision-form');
     form.classList.remove('decision-state-pending','decision-state-approved','decision-state-rejected');
-    form.classList.add('decision-state-'+select.value);
-    const changed=select.value!==select.dataset.savedValue;
+    form.classList.add('decision-state-'+decision.value);
+    reason.hidden=decision.value!=='rejected';
+    reason.required=decision.value==='rejected';
+    if(decision.value!=='rejected')reason.value='';
+    const changed=decision.value!==decision.dataset.savedValue || reason.value!==reason.dataset.savedValue;
     button.disabled=!changed;
     button.classList.toggle('decision-update-required',changed);
     button.classList.toggle('decision-update-saved',!changed);
     button.textContent=changed?'✕ Update':'✓ Updated';
   }
-  select.addEventListener('change',refreshDecisionState);
+  decision.addEventListener('change',refreshDecisionState);
+  reason.addEventListener('change',refreshDecisionState);
   form.addEventListener('submit',function(){
     button.disabled=true;
     button.classList.remove('decision-update-required');
     button.classList.add('decision-update-saving');
     button.textContent='Updating…';
   });
-  refreshDecisionState();
+  if(select===decision)refreshDecisionState();
 });
 </script>
