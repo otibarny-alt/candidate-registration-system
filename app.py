@@ -1,5 +1,5 @@
 
-# V1.22: separate public status and new-candidate registration entry pages.
+# V1.23: pending candidates may replace photo and payment evidence.
 import os, csv, re, uuid, base64, hmac, time, json
 from io import BytesIO, StringIO
 import requests
@@ -790,13 +790,45 @@ def save_candidate(c):
     if candidate_list_is_final():
         return render_candidate_form_page(c,error="The candidate list is FINAL. No application changes are permitted until a Level 2 administrator unlocks it."),423
 
-    # Once submitted, the application particulars are immutable. Pending and
-    # accepted applications are view-only. A rejected candidate may replace
-    # only the exact document identified by the administrator; no posted form
-    # value can alter their name, position, area, biography or other document.
+    # Once submitted, the application particulars are immutable. A pending
+    # candidate may replace either supporting image while the application is
+    # awaiting review. Accepted applications are view-only. A rejected
+    # candidate may replace only the exact document identified by the
+    # administrator; no posted value can alter their identity, position, area
+    # or biography.
     if c is not None and candidate_logged_in():
-        if c.approval_status in {"pending","approved"}:
-            return render_candidate_form_page(c,error="This application is view-only while its status is Pending or Accepted. No fields can be changed."),423
+        if c.approval_status=="approved":
+            return render_candidate_form_page(c,error="This accepted application is view-only. No fields can be changed."),423
+        if c.approval_status=="pending":
+            changed=False
+            cropped_photo=request.form.get("cropped_photo","").strip()
+            if cropped_photo:
+                try:
+                    header,encoded=cropped_photo.split(",",1)
+                    if not header.startswith("data:image/"):
+                        raise ValueError("Invalid image data")
+                    c.photo=base64.b64decode(encoded)
+                    c.photo_mime="image/jpeg"
+                    changed=True
+                except Exception:
+                    return render_candidate_form_page(c,error="The replacement candidate photo could not be processed. Please select and crop the image again.")
+
+            try:
+                payment_data,payment_mime=validated_image_upload(request.files.get("payment_evidence"),"Payment Evidence")
+            except ValueError as exc:
+                return render_candidate_form_page(c,error=str(exc))
+            if payment_data:
+                c.payment_evidence=payment_data
+                c.payment_evidence_mime=payment_mime
+                changed=True
+
+            if not changed:
+                return render_candidate_form_page(c,error="Select a replacement Candidate Photo or Payment Evidence before saving.")
+            if candidate_list_is_final():
+                db.session.rollback()
+                return render_candidate_form_page(c,error="The candidate list became FINAL while this update was open. Your documents were not saved."),423
+            db.session.commit()
+            return redirect(url_for("candidate_edit",candidate_id=c.id,saved=1))
         if c.approval_status!="rejected":
             return render_candidate_form_page(c,error="This application is not open for editing."),423
 
