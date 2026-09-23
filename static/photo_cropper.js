@@ -169,6 +169,28 @@
     }
     function finish(){ dragging=false; }
 
+    function backgroundLooksAllowed(){
+      // Fast browser pre-check. The server repeats the authoritative test.
+      const imageData=ctx.getImageData(0,0,canvas.width,canvas.height).data;
+      let sampled=0, allowed=0, white=0, orange=0;
+      for(let py=0;py<Math.floor(canvas.height*.72);py+=4){
+        for(let px=0;px<canvas.width;px+=4){
+          const inBorder=py<canvas.height*.16 || px<canvas.width*.11 || px>=canvas.width*.89;
+          if(!inBorder)continue;
+          const i=(py*canvas.width+px)*4;
+          const r=imageData[i],g=imageData[i+1],b=imageData[i+2];
+          const spread=Math.max(r,g,b)-Math.min(r,g,b);
+          const isWhite=Math.min(r,g,b)>=185 && spread<=55;
+          const isOrange=r>=145 && g>=55 && g<=190 && b<=115 && r>=g*1.15;
+          sampled++;
+          if(isWhite)white++;
+          if(isOrange)orange++;
+          if(isWhite||isOrange)allowed++;
+        }
+      }
+      return sampled>0 && allowed/sampled>=.64 && Math.max(white,orange)/sampled>=.48;
+    }
+
     canvas.addEventListener('mousedown',begin);
     canvas.addEventListener('mousemove',move);
     window.addEventListener('mouseup',finish);
@@ -183,12 +205,19 @@
         return;
       }
       draw();
+      if(!backgroundLooksAllowed()){
+        hidden.value='';
+        previewWrap.hidden=true;
+        status.className='lookup-status lookup-error';
+        status.textContent='Use a plain white or orange background with no scenery, patterns or other people.';
+        return;
+      }
       const result=canvas.toDataURL('image/jpeg',0.88);
       hidden.value=result;
       preview.src=result;
       previewWrap.hidden=false;
       status.className='lookup-status lookup-success';
-      status.textContent='✓ Crop confirmed. The preview below is the exact photo that will be saved.';
+      status.textContent='✓ Background pre-check passed. The server will also verify one clear face before saving.';
       previewWrap.scrollIntoView({behavior:'smooth',block:'center'});
     });
 

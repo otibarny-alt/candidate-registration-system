@@ -1,8 +1,10 @@
 
-# V1.23: pending candidates may replace photo and payment evidence.
+# V1.24: validate candidate portraits for one face and a white/orange background.
 import os, csv, re, uuid, base64, hmac, time, json
 from io import BytesIO, StringIO
 import requests
+import cv2
+import numpy as np
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response, abort
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect, text, func
@@ -177,6 +179,82 @@ def validated_image_upload(upload, field_label, max_bytes=5*1024*1024):
     else:
         raise ValueError(f"{field_label} must be a valid JPG, PNG or WebP image.")
     return data, mime
+
+_FACE_CASCADE=cv2.CascadeClassifier(
+    os.path.join(cv2.data.haarcascades,"haarcascade_frontalface_default.xml")
+)
+
+def validated_candidate_photo(cropped_photo):
+    """Decode a crop and require one clear face on white or orange."""
+    try:
+        header,encoded=str(cropped_photo or "").split(",",1)
+        if header.lower() not in {"data:image/jpeg;base64","data:image/jpg;base64"}:
+            raise ValueError("Candidate Photo must be cropped using the photo tool.")
+        if len(encoded)>8*1024*1024:
+            raise ValueError("Candidate Photo is too large. Select and crop a smaller image.")
+        data=base64.b64decode(encoded,validate=True)
+    except ValueError:
+        raise
+    except Exception as exc:
+        raise ValueError("Candidate Photo could not be decoded. Select and crop it again.") from exc
+
+    image=cv2.imdecode(np.frombuffer(data,dtype=np.uint8),cv2.IMREAD_COLOR)
+    if image is None:
+        raise ValueError("Candidate Photo is not a readable image.")
+    height,width=image.shape[:2]
+    if width<300 or height<375:
+        raise ValueError("Candidate Photo is too small. Use a clearer, higher-resolution photograph.")
+    if _FACE_CASCADE.empty():
+        raise RuntimeError("Candidate photo validation is temporarily unavailable. Please contact the administrator.")
+
+    gray=cv2.equalizeHist(cv2.cvtColor(image,cv2.COLOR_BGR2GRAY))
+    min_face=max(48,int(min(width,height)*0.14))
+    faces=_FACE_CASCADE.detectMultiScale(
+        gray,scaleFactor=1.08,minNeighbors=4,minSize=(min_face,min_face)
+    )
+    if len(faces)==0:
+        raise ValueError("No clear front-facing face was detected. Use a passport-style photograph.")
+    if len(faces)>1:
+        raise ValueError("More than one face was detected. Candidate Photo must show only the applicant.")
+
+    x,y,face_width,face_height=[int(value) for value in faces[0]]
+    face_ratio=(face_width*face_height)/float(width*height)
+    if face_ratio<0.055:
+        raise ValueError("The face is too small. Crop closer so the face is clearly visible.")
+    if face_ratio>0.62:
+        raise ValueError("The face is cropped too closely. Include the full head and some background.")
+    face_center_x=x+face_width/2
+    face_center_y=y+face_height/2
+    if abs(face_center_x-width/2)>width*0.22 or not height*0.22<=face_center_y<=height*0.58:
+        raise ValueError("Center the applicant's face in the passport-photo frame and crop again.")
+
+    face_gray=gray[max(0,y):min(height,y+face_height),max(0,x):min(width,x+face_width)]
+    if face_gray.size==0 or cv2.Laplacian(face_gray,cv2.CV_64F).var()<38:
+        raise ValueError("The face appears blurred. Upload a sharper photograph with good lighting.")
+
+    # Sample the outer area where the passport-photo background should be
+    # visible, excluding the lower centre where shoulders normally appear.
+    border=np.zeros((height,width),dtype=bool)
+    border[:max(1,int(height*0.16)),:]=True
+    side=max(1,int(width*0.11))
+    side_bottom=max(1,int(height*0.72))
+    border[:side_bottom,:side]=True
+    border[:side_bottom,width-side:]=True
+    pixels=image[border]
+    hsv=cv2.cvtColor(pixels.reshape(-1,1,3),cv2.COLOR_BGR2HSV).reshape(-1,3)
+    bgr=pixels.astype(np.int16)
+    channel_spread=bgr.max(axis=1)-bgr.min(axis=1)
+    white=(bgr.min(axis=1)>=185)&(channel_spread<=55)
+    # OpenCV hue uses 0..179. Accept light/dark ODM-style orange while
+    # excluding red, yellow, brown and skin tones.
+    orange=(hsv[:,0]>=5)&(hsv[:,0]<=23)&(hsv[:,1]>=85)&(hsv[:,2]>=105)
+    white_ratio=float(white.mean())
+    orange_ratio=float(orange.mean())
+    allowed_ratio=float((white|orange).mean())
+    if allowed_ratio<0.68 or max(white_ratio,orange_ratio)<0.52:
+        raise ValueError("Use a plain white or orange background with no scenery, patterns or other people.")
+
+    return data,"image/jpeg"
 
 def hierarchy_rows():
     try:
@@ -804,14 +882,10 @@ def save_candidate(c):
             cropped_photo=request.form.get("cropped_photo","").strip()
             if cropped_photo:
                 try:
-                    header,encoded=cropped_photo.split(",",1)
-                    if not header.startswith("data:image/"):
-                        raise ValueError("Invalid image data")
-                    c.photo=base64.b64decode(encoded)
-                    c.photo_mime="image/jpeg"
+                    c.photo,c.photo_mime=validated_candidate_photo(cropped_photo)
                     changed=True
-                except Exception:
-                    return render_candidate_form_page(c,error="The replacement candidate photo could not be processed. Please select and crop the image again.")
+                except (ValueError,RuntimeError) as exc:
+                    return render_candidate_form_page(c,error=str(exc))
 
             try:
                 payment_data,payment_mime=validated_image_upload(request.files.get("payment_evidence"),"Payment Evidence")
@@ -846,13 +920,9 @@ def save_candidate(c):
             if not cropped_photo:
                 return render_candidate_form_page(c,error="Select, crop and confirm a fresh Candidate Photo before resubmitting this rejected application.")
             try:
-                header,encoded=cropped_photo.split(",",1)
-                if not header.startswith("data:image/"):
-                    raise ValueError("Invalid image data")
-                c.photo=base64.b64decode(encoded)
-                c.photo_mime="image/jpeg"
-            except Exception:
-                return render_candidate_form_page(c,error="The corrected candidate photo could not be processed. Please select and crop the image again.")
+                c.photo,c.photo_mime=validated_candidate_photo(cropped_photo)
+            except (ValueError,RuntimeError) as exc:
+                return render_candidate_form_page(c,error=str(exc))
         else:
             return render_candidate_form_page(c,error="The administrator must record a valid rejection reason before a correction can be submitted."),423
 
@@ -954,13 +1024,9 @@ def save_candidate(c):
     cropped_photo=f.get("cropped_photo","").strip()
     if cropped_photo:
         try:
-            header,encoded=cropped_photo.split(",",1)
-            if not header.startswith("data:image/"):
-                raise ValueError("Invalid image data")
-            c.photo=base64.b64decode(encoded)
-            c.photo_mime="image/jpeg"
-        except Exception:
-            return render_candidate_form_page(c,error="The cropped candidate photo could not be processed. Please select and crop the image again.")
+            c.photo,c.photo_mime=validated_candidate_photo(cropped_photo)
+        except (ValueError,RuntimeError) as exc:
+            return render_candidate_form_page(c,error=str(exc))
     if not c.photo:
         return render_candidate_form_page(c,error="Candidate Photo is required. Select, crop and confirm a candidate photo before saving the application.")
 

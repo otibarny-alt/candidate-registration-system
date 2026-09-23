@@ -51,12 +51,12 @@
 <div class="candidate-photo-field">
 <label>Candidate Photo</label>
 <input type="file" id="photo_input" accept="image/jpeg,image/png,image/webp,image/*" {% if existing_candidate and not (pending_document_edit or correction_photo) %}disabled{% endif %} {% if not candidate or not candidate.photo or correction_photo %}required{% endif %}>
-<small class="muted">{% if pending_document_edit %}Optional: select, crop and confirm a replacement candidate photo.{% elif correction_photo %}Open for correction: select and crop a fresh candidate photo.{% elif existing_candidate %}Candidate photo is locked for this application status.{% else %}Required. Select an image, crop it and click “Crop &amp; Use Photo” before saving.{% endif %}</small>
+<small class="muted">{% if pending_document_edit %}Optional: select, crop and confirm a replacement candidate photo.{% elif correction_photo %}Open for correction: select and crop a fresh candidate photo.{% elif existing_candidate %}Candidate photo is locked for this application status.{% else %}Required. Select an image, crop it and click “Crop &amp; Use Photo” before saving.{% endif %} A valid photo must show exactly one clear, front-facing face on a plain white or orange background.</small>
 <input type="hidden" name="cropped_photo" id="cropped_photo">
 
 <div id="cropper_wrap" class="cropper-wrap" hidden>
   <h3>Crop Candidate Photo</h3>
-  <p class="muted">Drag the picture inside the frame and use the zoom slider. The area inside the frame is exactly what will be saved.</p>
+  <p class="muted">Drag the picture inside the frame and use the zoom slider. Centre one clear, front-facing face and retain enough plain white or orange background. The area inside the frame is exactly what will be validated and saved.</p>
   <div class="crop-stage">
     <canvas id="crop_canvas" width="400" height="500"></canvas>
   </div>
@@ -233,4 +233,4 @@ candidateForm.addEventListener('submit',e=>{
 
 
 </script>
-<script src="/static/photo_cropper.js?v=18"></script>
+<script src="/static/photo_cropper.js?v=24"></script>
