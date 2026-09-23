@@ -25,6 +25,7 @@ app.config["SQLALCHEMY_DATABASE_URI"]=db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"]=False
 app.config["MAX_CONTENT_LENGTH"]=6*1024*1024
 db=SQLAlchemy(app)
+SYSTEM_RESET_TOKEN=os.getenv("SYSTEM_RESET_TOKEN","").strip()
 
 COUNTY_MAIN=os.getenv("COUNTY_MAIN_FILENAME","county_main.csv")
 AUTH_USERNAME=os.getenv("AUTH_USERNAME","admin")
@@ -110,6 +111,21 @@ def logged_in():
 
 def candidate_logged_in():
     return bool(session.get("candidate_national_id"))
+
+@app.post("/api/admin/reset-test-data")
+def api_admin_reset_test_data():
+    """Internal reset called by the voting-system administrator."""
+    supplied=request.headers.get("Authorization","")
+    expected="Bearer "+SYSTEM_RESET_TOKEN
+    if not SYSTEM_RESET_TOKEN or not hmac.compare_digest(supplied,expected):
+        return jsonify({"ok":False,"error":"Unauthorized"}),403
+    deleted=Candidate.query.delete(synchronize_session=False)
+    state=portal_state()
+    state.candidate_list_final=False
+    state.locked_at=None
+    state.locked_by=None
+    db.session.commit()
+    return jsonify({"ok":True,"deleted_candidates":deleted})
 
 def require_login():
     if not logged_in():

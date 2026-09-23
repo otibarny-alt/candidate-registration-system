@@ -5,5 +5,7 @@ services:
     buildCommand: pip install -r requirements.txt && python verify_runtime.py
     startCommand: gunicorn app:app
     envVars:
+      - key: SYSTEM_RESET_TOKEN
+        sync: false
       - key: PYTHON_VERSION
         value: 3.12.14
