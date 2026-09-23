@@ -1,6 +1,6 @@
 
-# V1.24: validate candidate portraits for one face and a white/orange background.
-import os, csv, re, uuid, base64, hmac, time, json
+# V1.25: validate portraits and payment evidence documents.
+import os, csv, re, uuid, base64, hmac, time, json, threading
 from io import BytesIO, StringIO
 import requests
 import cv2
@@ -68,6 +68,8 @@ class Candidate(db.Model):
     # ballot candidate API never pulls every receipt into memory.
     payment_evidence=deferred(db.Column(db.LargeBinary))
     payment_evidence_mime=db.Column(db.String(80))
+    payment_method=db.Column(db.String(40))
+    payment_reference=db.Column(db.String(100),unique=True,index=True)
     status=db.Column(db.String(20),default="active",nullable=False,index=True)
     approval_status=db.Column(db.String(20),default="pending",nullable=False,index=True)
     rejection_reason=db.Column(db.String(80))
@@ -88,6 +90,14 @@ with app.app_context():
         db.session.execute(text(f"ALTER TABLE candidate ADD COLUMN payment_evidence {binary_type}"))
     if "payment_evidence_mime" not in candidate_columns:
         db.session.execute(text("ALTER TABLE candidate ADD COLUMN payment_evidence_mime VARCHAR(80)"))
+    if "payment_method" not in candidate_columns:
+        db.session.execute(text("ALTER TABLE candidate ADD COLUMN payment_method VARCHAR(40)"))
+    if "payment_reference" not in candidate_columns:
+        db.session.execute(text("ALTER TABLE candidate ADD COLUMN payment_reference VARCHAR(100)"))
+    db.session.execute(text(
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_candidate_payment_reference "
+        "ON candidate (payment_reference) WHERE payment_reference IS NOT NULL"
+    ))
     if "approval_status" not in candidate_columns:
         db.session.execute(text("ALTER TABLE candidate ADD COLUMN approval_status VARCHAR(20) NOT NULL DEFAULT 'pending'"))
     if "rejection_reason" not in candidate_columns:
@@ -179,6 +189,85 @@ def validated_image_upload(upload, field_label, max_bytes=5*1024*1024):
     else:
         raise ValueError(f"{field_label} must be a valid JPG, PNG or WebP image.")
     return data, mime
+
+_PAYMENT_OCR=None
+_PAYMENT_OCR_LOCK=threading.Lock()
+
+def payment_ocr_engine():
+    """Load OCR only for a payment upload so ordinary pages stay lightweight."""
+    global _PAYMENT_OCR
+    if _PAYMENT_OCR is None:
+        with _PAYMENT_OCR_LOCK:
+            if _PAYMENT_OCR is None:
+                from rapidocr_onnxruntime import RapidOCR
+                _PAYMENT_OCR=RapidOCR()
+    return _PAYMENT_OCR
+
+def payment_reference_in_use(reference,candidate_id=None):
+    query=Candidate.query.filter(func.upper(Candidate.payment_reference)==str(reference).upper())
+    if candidate_id is not None:
+        query=query.filter(Candidate.id!=candidate_id)
+    return query.with_entities(Candidate.id).first() is not None
+
+def validated_payment_evidence(upload,candidate_id=None):
+    """Accept only OCR-verifiable M-Pesa, cheque, or card confirmations."""
+    data,mime=validated_image_upload(upload,"Payment Evidence")
+    if not data:
+        return None,None,None,None
+    image=cv2.imdecode(np.frombuffer(data,dtype=np.uint8),cv2.IMREAD_COLOR)
+    if image is None or image.shape[0]<240 or image.shape[1]<240:
+        raise ValueError("Payment Evidence is too small or unreadable. Upload a clear full-page image or screenshot.")
+    try:
+        result,_=payment_ocr_engine()(image)
+    except Exception as exc:
+        app.logger.exception("Payment evidence OCR failed")
+        raise RuntimeError("Payment Evidence could not be read automatically. Upload a clearer image.") from exc
+    lines=[str(item[1]).strip() for item in (result or []) if len(item)>=2 and str(item[1]).strip()]
+    text=" ".join(lines).upper()
+    text=re.sub(r"\s+"," ",text)
+    if len(text)<25:
+        raise ValueError("Payment Evidence contains too little readable text. Upload the complete payment confirmation.")
+
+    has_amount=bool(re.search(r"\b(?:KES|KSHS?|AMOUNT|TOTAL)\b",text))
+    method=None;reference=None
+
+    if re.search(r"\bM[ .-]?PESA\b|SAFARICOM",text):
+        codes=[]
+        for token in re.findall(r"(?<![A-Z0-9])([A-Z0-9]{10})(?![A-Z0-9])",text):
+            if sum(ch.isalpha() for ch in token)>=2 and sum(ch.isdigit() for ch in token)>=2:
+                codes.append(token)
+        if not codes:
+            raise ValueError("The M-Pesa message does not contain a readable valid 10-character M-Pesa code.")
+        if not has_amount or not re.search(r"\b(?:CONFIRMED|PAID|SENT|PAYMENT|RECEIVED)\b",text):
+            raise ValueError("Upload the complete M-Pesa confirmation showing the code, payment status and amount.")
+        method="mpesa";reference="MPESA:"+codes[0]
+    elif re.search(r"\b(?:CHEQUE|CHECK)\b",text):
+        if not re.search(r"\bBANK\b",text) or not has_amount or not re.search(r"\b(?:PAY|PAYEE|PAY TO|DATE)\b",text):
+            raise ValueError("The image does not contain the required bank cheque details: bank, payee/date and amount.")
+        match=re.search(r"\b(?:CHEQUE|CHECK)(?:\s+(?:NO|NUMBER|#))?[\s:.-]*([0-9]{6,12})\b",text)
+        if not match:
+            numbers=re.findall(r"(?<![0-9])([0-9]{6,12})(?![0-9])",text)
+            match_value=numbers[-1] if numbers else ""
+        else:
+            match_value=match.group(1)
+        if not match_value:
+            raise ValueError("The bank cheque number could not be read. Upload a sharper image of the complete cheque.")
+        method="bank_cheque";reference="CHEQUE:"+match_value
+    elif re.search(r"\b(?:VISA|MASTERCARD|CREDIT CARD|CARD PAYMENT|CARD TRANSACTION)\b",text):
+        if re.search(r"(?<![0-9])(?:[0-9][ -]?){13,19}(?![0-9])",text) and not re.search(r"(?:\*|X){4,}",text):
+            raise ValueError("For security, upload a confirmation with the card number masked except for the last four digits.")
+        if not has_amount or not re.search(r"\b(?:APPROVED|SUCCESSFUL|PAID|PAYMENT CONFIRMED|COMPLETED)\b",text):
+            raise ValueError("Upload the complete credit-card confirmation showing successful status and amount.")
+        match=re.search(r"\b(?:REFERENCE|REF|TRANSACTION ID|AUTHORIZATION CODE|AUTH CODE|CONFIRMATION)(?:\s+(?:NO|NUMBER|ID))?[\s:.-]*([A-Z0-9-]{6,24})\b",text)
+        if not match:
+            raise ValueError("The credit-card payment reference could not be read from the confirmation.")
+        method="credit_card";reference="CARD:"+match.group(1).strip("-")
+    else:
+        raise ValueError("Payment Evidence must be an M-Pesa payment message, bank cheque, or credit-card payment confirmation.")
+
+    if payment_reference_in_use(reference,candidate_id):
+        raise ValueError("This payment reference has already been used for another candidate application.")
+    return data,mime,method,reference
 
 _FACE_CASCADE=cv2.CascadeClassifier(
     os.path.join(cv2.data.haarcascades,"haarcascade_frontalface_default.xml")
@@ -756,8 +845,8 @@ def candidate_decision(candidate_id):
     rejection_reason=request.form.get("rejection_reason","").strip().lower()
     if decision not in {"pending","approved","rejected"}:
         abort(400)
-    if decision=="approved" and (not c.photo or not c.payment_evidence):
-        session["candidate_admin_error"]="This application cannot be Accepted until both the candidate photo and payment evidence have been uploaded."
+    if decision=="approved" and (not c.photo or not c.payment_evidence or not c.payment_reference):
+        session["candidate_admin_error"]="This application cannot be Accepted until the candidate photo and OCR-verified payment evidence have been uploaded."
         return return_to_filtered_dashboard()
     if decision=="rejected" and rejection_reason not in {"faulty_payment_evidence","improper_candidate_picture"}:
         session["candidate_admin_error"]="Select either Faulty payment evidence or Improper candidate picture before rejecting the application."
@@ -888,12 +977,16 @@ def save_candidate(c):
                     return render_candidate_form_page(c,error=str(exc))
 
             try:
-                payment_data,payment_mime=validated_image_upload(request.files.get("payment_evidence"),"Payment Evidence")
-            except ValueError as exc:
+                payment_data,payment_mime,payment_method,payment_reference=validated_payment_evidence(
+                    request.files.get("payment_evidence"),c.id
+                )
+            except (ValueError,RuntimeError) as exc:
                 return render_candidate_form_page(c,error=str(exc))
             if payment_data:
                 c.payment_evidence=payment_data
                 c.payment_evidence_mime=payment_mime
+                c.payment_method=payment_method
+                c.payment_reference=payment_reference
                 changed=True
 
             if not changed:
@@ -908,13 +1001,17 @@ def save_candidate(c):
 
         if c.rejection_reason=="faulty_payment_evidence":
             try:
-                payment_data,payment_mime=validated_image_upload(request.files.get("payment_evidence"),"Payment Evidence")
-            except ValueError as exc:
+                payment_data,payment_mime,payment_method,payment_reference=validated_payment_evidence(
+                    request.files.get("payment_evidence"),c.id
+                )
+            except (ValueError,RuntimeError) as exc:
                 return render_candidate_form_page(c,error=str(exc))
             if not payment_data:
                 return render_candidate_form_page(c,error="Upload fresh Payment Evidence before resubmitting this rejected application.")
             c.payment_evidence=payment_data
             c.payment_evidence_mime=payment_mime
+            c.payment_method=payment_method
+            c.payment_reference=payment_reference
         elif c.rejection_reason=="improper_candidate_picture":
             cropped_photo=request.form.get("cropped_photo","").strip()
             if not cropped_photo:
@@ -1032,12 +1129,16 @@ def save_candidate(c):
 
     payment_upload=request.files.get("payment_evidence")
     try:
-        payment_data,payment_mime=validated_image_upload(payment_upload,"Payment Evidence")
-    except ValueError as exc:
+        payment_data,payment_mime,payment_method,payment_reference=validated_payment_evidence(
+            payment_upload,c.id
+        )
+    except (ValueError,RuntimeError) as exc:
         return render_candidate_form_page(c,error=str(exc))
     if payment_data:
         c.payment_evidence=payment_data
         c.payment_evidence_mime=payment_mime
+        c.payment_method=payment_method
+        c.payment_reference=payment_reference
     elif not c.payment_evidence:
         return render_candidate_form_page(c,error="Payment Evidence is required. Upload a clear JPG, PNG or WebP image before saving the candidate.")
 

@@ -87,10 +87,10 @@
 <div class="payment-evidence-field">
 <label for="payment_evidence">Payment Evidence</label>
 <input type="file" id="payment_evidence" name="payment_evidence" accept="image/jpeg,image/png,image/webp" {% if existing_candidate and not (pending_document_edit or correction_payment) %}disabled{% endif %} {% if not candidate or not candidate.payment_evidence or correction_payment %}required{% endif %}>
-<small class="muted">{% if pending_document_edit %}Optional: upload replacement payment evidence (JPG, PNG or WebP; maximum 5 MB).{% elif correction_payment %}Open for correction: upload fresh payment evidence.{% elif existing_candidate %}Payment evidence is locked for this application status.{% else %}Required image evidence. Accepted formats: JPG, PNG or WebP; maximum size 5 MB.{% endif %}</small>
+<small class="muted">{% if pending_document_edit %}Optional: upload replacement payment evidence (JPG, PNG or WebP; maximum 5 MB).{% elif correction_payment %}Open for correction: upload fresh payment evidence.{% elif existing_candidate %}Payment evidence is locked for this application status.{% else %}Required image evidence. Accepted formats: JPG, PNG or WebP; maximum size 5 MB.{% endif %} Only a complete M-Pesa confirmation with a valid 10-character code, a bank cheque, or a successful credit-card payment confirmation is accepted. Card numbers must be masked except for the last four digits.</small>
 {% if candidate and candidate.payment_evidence %}
 <div class="existing-photo-wrap">
-  <span class="muted">Current payment evidence is saved.</span>
+  <span class="muted">Current payment evidence is saved.{% if candidate.payment_method %} Verified type: {{ candidate.payment_method|replace('_',' ')|title }}.{% endif %}{% if candidate.payment_reference %} Reference: {{ candidate.payment_reference }}.{% endif %}</span>
   <a href="/payment-evidence/{{candidate.id}}" target="_blank" rel="noopener">View Payment Evidence</a>
 </div>
 {% endif %}

@@ -6,3 +6,4 @@ psycopg[binary]>=3.2,<4
 requests>=2.31,<3
 numpy>=2.0,<3
 opencv-python-headless>=4.10,<5
+rapidocr-onnxruntime>=1.4,<2
