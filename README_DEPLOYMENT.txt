@@ -201,7 +201,11 @@ versions. Those records remain visible so an administrator can review and correc
 New duplicates are blocked from V1.10 onward.
 
 
-V1.11 — PAYMENT EVIDENCE IMAGE
+NOTE: Payment-evidence sections below describe obsolete historical releases.
+V1.27 removes payment evidence completely. The passport photo is now the only
+upload, and Application Date is shown on the administrator approval page.
+
+V1.11 — PAYMENT EVIDENCE IMAGE (OBSOLETE)
 --------------------------------
 - Adds a required Payment Evidence image to new candidate applications.
 - Accepts validated JPG, PNG and WebP images up to 5 MB.

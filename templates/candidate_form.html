@@ -1,13 +1,12 @@
 <!doctype html><link rel=stylesheet href=/static/style.css><meta name=viewport content="width=device-width,initial-scale=1">
 {% set existing_candidate = self_service and candidate %}
-{% set pending_document_edit = existing_candidate and (candidate.approval_status or 'pending')=='pending' %}
+{% set pending_document_edit = existing_candidate and (candidate.approval_status or 'not_submitted') in ['pending','not_submitted'] %}
 {% set correction_photo = existing_candidate and candidate.approval_status=='rejected' and candidate.rejection_reason=='improper_candidate_picture' %}
-{% set correction_payment = existing_candidate and candidate.approval_status=='rejected' and candidate.rejection_reason=='faulty_payment_evidence' %}
 <div class=top><b>Candidate Registration & Profile Portal</b>{% if self_service %}<a href=/candidate/logout>Candidate Logout</a>{% endif %}</div>
 <div class=wrap><div class=card><div class="candidate-form-heading"><h2>{{"Edit Candidate" if candidate else "Register Candidate"}}</h2>{% if not candidate %}<a class="btn status-login-link" href="{{url_for('candidate_access')}}">Already registered? View Status / Edit Application</a>{% endif %}</div>
 {% if self_service %}<div class="privacy-notice"><b>Private application:</b> You are viewing only your own candidate information.</div>{% endif %}
 {% if list_locked %}<div class="central-lock central-lock-final"><h3>🔒 FINAL CANDIDATE LIST — EDITING LOCKED</h3><p>This application is available for viewing only. No changes can be saved unless a Level 2 administrator unlocks the candidate list.</p></div>{% endif %}
-{% if self_service and candidate %}<div class="decision-notice decision-{{candidate.approval_status or 'pending'}}"><b>Application status:</b> {% if candidate.approval_status=='approved' %}ACCEPTED{% elif candidate.approval_status=='rejected' %}REJECTED{% else %}PENDING APPROVAL{% endif %}{% if (candidate.approval_status or 'pending') == 'pending' %} — your application is awaiting administrator review. Candidate Photo and Payment Evidence may be replaced; all other fields are locked.{% elif candidate.approval_status == 'approved' %} — your application is accepted for inclusion on the ballot. All fields are locked.{% else %} — your application is not included on the ballot.<br><b>Reason for rejection:</b> {% if candidate.rejection_reason=='faulty_payment_evidence' %}Faulty payment evidence. Only Payment Evidence is open for correction.{% elif candidate.rejection_reason=='improper_candidate_picture' %}Improper candidate picture. Only Candidate Photo is open for correction.{% else %}Contact the candidate registration administrator. No field is open until a valid reason is recorded{% endif %}.{% endif %}</div>{% endif %}
+{% if self_service and candidate %}<div class="decision-notice decision-{{candidate.approval_status or 'not_submitted'}}"><b>Application status:</b> {% if candidate.approval_status=='approved' %}ACCEPTED{% elif candidate.approval_status=='rejected' %}REJECTED{% elif candidate.approval_status=='pending' %}PENDING APPROVAL{% else %}NOT SUBMITTED{% endif %}{% if candidate.approval_status == 'not_submitted' %} — the application has not been sent for administrator review. Upload a passport photo that passes validation to submit it.{% elif candidate.approval_status == 'pending' %} — your application is awaiting administrator review. The passport photo may be replaced; all other fields are locked.{% elif candidate.approval_status == 'approved' %} — your application is accepted for inclusion on the ballot. All fields are locked.{% else %} — your application is not included on the ballot.<br><b>Reason for rejection:</b> {% if candidate.rejection_reason=='improper_candidate_picture' %}Invalid passport photo. Only the passport photo is open for correction.{% else %}Contact the candidate registration administrator. No field is open until a valid reason is recorded{% endif %}.{% endif %}</div>{% endif %}
 {% if self_service and verified_member.geography_verified %}<div class="eligibility-notice"><b>Your verified voter area:</b> {{verified_member.county|replace('_',' ')|title}} · {{verified_member.constituency|replace('_',' ')|title}} · {{verified_member.ward|replace('_',' ')|title}}{% if verified_member.polling_station %}<br><b>Polling station:</b> {{verified_member.polling_station|replace('_',' ')|title}}{% endif %}<br><span>Governor, Senator and Woman Representative applications are restricted to this county; MNA to this constituency; and MCA to this ward. President is national.</span></div>{% elif self_service %}<div class="error">Your voter area could not be refreshed. Please log out and sign in again before editing a non-presidential application.</div>{% endif %}
 {% if saved %}<div class="success">Your candidate application documents have been saved successfully.</div>{% endif %}
 {% if error %}<div class=error>{{error}}</div>{% endif %}
@@ -44,18 +43,18 @@
 </select></div>
 {% if not self_service %}<div><label>Record Status</label><select name=status><option value=active {% if not candidate or candidate.status=="active" %}selected{% endif %}>Active</option><option value=inactive {% if candidate and candidate.status=="inactive" %}selected{% endif %}>Inactive</option></select></div>
 <div><label>Application Decision</label><select name=approval_status><option value=pending {% if not candidate or (candidate.approval_status or 'pending')=='pending' %}selected{% endif %}>Pending Review</option><option value=approved {% if candidate and candidate.approval_status=='approved' %}selected{% endif %}>Accepted — Include on Ballot</option><option value=rejected {% if candidate and candidate.approval_status=='rejected' %}selected{% endif %}>Rejected — Exclude from Ballot</option></select></div>
-<div><label>Rejection Reason</label><select name=rejection_reason><option value="">Select when rejected</option><option value="faulty_payment_evidence" {% if candidate and candidate.rejection_reason=='faulty_payment_evidence' %}selected{% endif %}>Faulty payment evidence</option><option value="improper_candidate_picture" {% if candidate and candidate.rejection_reason=='improper_candidate_picture' %}selected{% endif %}>Improper candidate picture</option></select></div>{% endif %}
+<div><label>Rejection Reason</label><select name=rejection_reason><option value="">Select when rejected</option><option value="improper_candidate_picture" {% if candidate and candidate.rejection_reason=='improper_candidate_picture' %}selected{% endif %}>Invalid passport photo</option></select></div>{% endif %}
 <div id=countyBox><label>County</label><select name=county id=county {% if existing_candidate %}disabled{% endif %}><option value="">Select County</option></select></div>
 <div id=constBox><label>Constituency</label><select name=constituency id=constituency {% if existing_candidate %}disabled{% endif %}><option value="">Select Constituency</option></select></div>
 <div id=wardBox><label>Ward</label><select name=ward id=ward {% if existing_candidate %}disabled{% endif %}><option value="">Select Ward</option></select></div>
 <div class="candidate-photo-field">
-<label>Candidate Photo</label>
+<label>Passport Photo</label>
 <input type="file" id="photo_input" accept="image/jpeg,image/png,image/webp,image/*" {% if existing_candidate and not (pending_document_edit or correction_photo) %}disabled{% endif %} {% if not candidate or not candidate.photo or correction_photo %}required{% endif %}>
-<small class="muted">{% if pending_document_edit %}Optional: select, crop and confirm a replacement candidate photo.{% elif correction_photo %}Open for correction: select and crop a fresh candidate photo.{% elif existing_candidate %}Candidate photo is locked for this application status.{% else %}Required. Select an image, crop it and click “Crop &amp; Use Photo” before saving.{% endif %} A valid photo must show exactly one clear, front-facing face on a plain white or orange background.</small>
+<small class="muted">{% if pending_document_edit %}Optional: select, crop and confirm a replacement passport photo.{% elif correction_photo %}Open for correction: select and crop a fresh passport photo.{% elif existing_candidate %}Passport photo is locked for this application status.{% else %}Required. Select an image, crop it and click “Crop &amp; Use Photo” before saving.{% endif %} A valid photo must show exactly one clear, front-facing face on a plain white or orange background.</small>
 <input type="hidden" name="cropped_photo" id="cropped_photo">
 
 <div id="cropper_wrap" class="cropper-wrap" hidden>
-  <h3>Crop Candidate Photo</h3>
+  <h3>Crop Passport Photo</h3>
   <p class="muted">Drag the picture inside the frame and use the zoom slider. Centre one clear, front-facing face and retain enough plain white or orange background. The area inside the frame is exactly what will be validated and saved.</p>
   <div class="crop-stage">
     <canvas id="crop_canvas" width="400" height="500"></canvas>
@@ -72,7 +71,7 @@
 
 <div id="cropped_preview_wrap" class="cropped-preview-wrap" hidden>
   <b>Cropped photo to be saved:</b>
-  <img id="cropped_preview" class="cropped-preview" alt="Cropped candidate photo preview">
+  <img id="cropped_preview" class="cropped-preview" alt="Cropped passport photo preview">
   <div class="lookup-status lookup-success">✓ Crop confirmed. This is the photo that will be stored.</div>
 </div>
 
@@ -83,21 +82,9 @@
 </div>
 {% endif %}
 </div>
-</div>
-<div class="payment-evidence-field">
-<label for="payment_evidence">Payment Evidence</label>
-<input type="file" id="payment_evidence" name="payment_evidence" accept="image/jpeg,image/png,image/webp" {% if existing_candidate and not (pending_document_edit or correction_payment) %}disabled{% endif %} {% if not candidate or not candidate.payment_evidence or correction_payment %}required{% endif %}>
-<small class="muted">{% if pending_document_edit %}Optional: upload replacement payment evidence (JPG, PNG or WebP; maximum 5 MB).{% elif correction_payment %}Open for correction: upload fresh payment evidence.{% elif existing_candidate %}Payment evidence is locked for this application status.{% else %}Required image evidence. Accepted formats: JPG, PNG or WebP; maximum size 5 MB.{% endif %} Only a complete M-Pesa confirmation with a valid 10-character code, a bank cheque, or a successful credit-card payment confirmation is accepted. Card numbers must be masked except for the last four digits.</small>
-{% if candidate and candidate.payment_evidence %}
-<div class="existing-photo-wrap">
-  <span class="muted">Current payment evidence is saved.{% if candidate.payment_method %} Verified type: {{ candidate.payment_method|replace('_',' ')|title }}.{% endif %}{% if candidate.payment_reference %} Reference: {{ candidate.payment_reference }}.{% endif %}</span>
-  <a href="/payment-evidence/{{candidate.id}}" target="_blank" rel="noopener">View Payment Evidence</a>
-</div>
-{% endif %}
-</div>
 <label>Short Biography</label><textarea name=bio rows=7 placeholder="Candidate biography, experience, priorities, etc." {% if existing_candidate %}disabled{% endif %}>{{candidate.bio if candidate else ''}}</textarea>
 {% if not list_locked %}<div class="form-actions">
-  {% if not existing_candidate %}<button type="submit">Save Candidate</button>{% elif pending_document_edit %}<button type="submit">Save Photo / Payment Changes</button>{% elif correction_photo %}<button type="submit">Submit Corrected Candidate Photo</button>{% elif correction_payment %}<button type="submit">Submit Corrected Payment Evidence</button>{% else %}<span class="view-only-message">No fields are open for editing.</span>{% endif %}
+  {% if not existing_candidate %}<button type="submit">Validate Passport Photo &amp; Submit Application</button>{% elif candidate.approval_status=='not_submitted' %}<button type="submit">Validate Passport Photo &amp; Submit Application</button>{% elif pending_document_edit %}<button type="submit">Save Passport Photo Change</button>{% elif correction_photo %}<button type="submit">Submit Corrected Passport Photo</button>{% else %}<span class="view-only-message">No fields are open for editing.</span>{% endif %}
   <a class="btn cancel-edit-btn" href="{{ url_for('candidate_home') if self_service else url_for('dashboard') }}">Cancel Edit</a>
 </div>{% endif %}
 </fieldset></form></div></div>

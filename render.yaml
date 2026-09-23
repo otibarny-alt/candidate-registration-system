@@ -2,7 +2,7 @@ services:
   - type: web
     name: candidate-registration-portal
     env: python
-    buildCommand: pip install -r requirements.txt && pip install --no-deps rapidocr-onnxruntime==1.4.4 && python verify_runtime.py
+    buildCommand: pip install -r requirements.txt && python verify_runtime.py
     startCommand: gunicorn app:app
     envVars:
       - key: PYTHON_VERSION
