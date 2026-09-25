@@ -32,7 +32,7 @@
 
 <div><label>Phone</label><input id="phone" name=phone readonly value="{{candidate.phone if candidate else (verified_member.phone if verified_member else '')}}"><small class="muted">Pulled from Kobo.</small></div>
 
-<div><label>Email</label><input id="email" name=email readonly value="{{candidate.email if candidate else (verified_member.email if verified_member else '')}}"><small class="muted">Pulled from Kobo.</small></div>
+<div><label>Email</label><input id="email" name=email readonly value="{{candidate.email if candidate else (verified_member.email if verified_member else '')}}"><small class="muted">Pulled from the authoritative membership source when available.</small></div>
 
 <div><label>Membership No.</label><input id="membership_no" name=membership_no readonly value="{{candidate.membership_no if candidate else (verified_member.membership_no if verified_member else '')}}"><small class="muted">Pulled from Kobo.</small></div>
 

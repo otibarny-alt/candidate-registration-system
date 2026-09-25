@@ -6,6 +6,8 @@ from io import BytesIO, StringIO
 import requests
 import cv2
 import numpy as np
+import psycopg
+from psycopg.rows import dict_row
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response, abort
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect, text, func
@@ -41,6 +43,8 @@ KOBO_API_TOKEN=os.getenv("KOBO_API_TOKEN","").strip()
 MEMBERSHIP_CSV_FILENAME=os.getenv("MEMBERSHIP_CSV_FILENAME","membership_registration.csv").strip()
 MEMBERSHIP_CSV_CACHE_SECONDS=int(os.getenv("MEMBERSHIP_CSV_CACHE_SECONDS","300") or 300)
 _MEMBERSHIP_CSV_CACHE={"loaded_at":0.0,"rows":{}}
+MASTER_REGISTER_DATABASE_URL=os.getenv("MASTER_REGISTER_DATABASE_URL","").strip()
+MASTER_REGISTER_STRICT=os.getenv("MASTER_REGISTER_STRICT","true").strip().lower() in {"1","true","yes","on"}
 
 POSITIONS=[
  ("president","President","national"),
@@ -523,8 +527,67 @@ def _membership_from_csv(national_id):
         **geography,
     }
 
+def _membership_from_master_register(national_id):
+    """Read the authoritative voter record imported into PostgreSQL."""
+    if not MASTER_REGISTER_DATABASE_URL:
+        raise RuntimeError("MASTER_REGISTER_DATABASE_URL is not configured in Render.")
+    normalized=re.sub(r"\D","",str(national_id or ""))
+    if not normalized:
+        return None
+    with psycopg.connect(
+        MASTER_REGISTER_DATABASE_URL,
+        row_factory=dict_row,
+        connect_timeout=3,
+        options="-c statement_timeout=5000",
+    ) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""SELECT national_id,party_membership_number,first_name,middle_name,
+                                  surname,full_name,phone,county,constituency,ward,
+                                  polling_station,polling_station_code
+                           FROM master_voters
+                           WHERE active AND national_id=%s LIMIT 1""",(normalized,))
+            row=cur.fetchone()
+    if not row:
+        return None
+    full_name=str(row.get("full_name") or "").strip() or " ".join(
+        str(row.get(key) or "").strip()
+        for key in ("first_name","middle_name","surname")
+        if str(row.get(key) or "").strip()
+    )
+    county=str(row.get("county") or "").strip()
+    constituency=str(row.get("constituency") or "").strip()
+    ward=str(row.get("ward") or "").strip()
+    return {
+        "national_id":str(row.get("national_id") or normalized).strip(),
+        "full_name":full_name,
+        "phone":str(row.get("phone") or "").strip(),
+        "email":"",
+        "membership_no":str(row.get("party_membership_number") or "").strip(),
+        "county":county,
+        "constituency":constituency,
+        "ward":ward,
+        "polling_station":str(row.get("polling_station") or "").strip(),
+        "polling_station_code":str(row.get("polling_station_code") or "").strip(),
+        "geography_verified":bool(county and constituency and ward),
+        "submission_id":"master-voters:"+normalized,
+        "membership_source":"postgresql_master_voters",
+    }
+
 def lookup_membership(national_id):
-    """Prefer live Kobo; use its media CSV before declaring an ID unregistered."""
+    """Use PostgreSQL master_voters; optionally retain legacy fallback."""
+    if MASTER_REGISTER_DATABASE_URL:
+        try:
+            member=_membership_from_master_register(national_id)
+        except Exception as exc:
+            if MASTER_REGISTER_STRICT:
+                raise RuntimeError("Unable to contact the new master voters register. Please try again.") from exc
+            member=None
+        if member:
+            return member
+        if MASTER_REGISTER_STRICT:
+            return None
+    elif MASTER_REGISTER_STRICT:
+        raise RuntimeError("MASTER_REGISTER_DATABASE_URL is not configured in Render.")
     live_error=None
     try:
         member=_lookup_membership_kobo(national_id)

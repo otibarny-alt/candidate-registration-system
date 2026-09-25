@@ -5,6 +5,10 @@ services:
     buildCommand: pip install -r requirements.txt && python verify_runtime.py
     startCommand: gunicorn app:app
     envVars:
+      - key: MASTER_REGISTER_DATABASE_URL
+        sync: false
+      - key: MASTER_REGISTER_STRICT
+        value: "true"
       - key: SYSTEM_RESET_TOKEN
         sync: false
       - key: PYTHON_VERSION
