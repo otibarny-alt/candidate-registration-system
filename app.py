@@ -26,6 +26,7 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"]=False
 app.config["MAX_CONTENT_LENGTH"]=6*1024*1024
 db=SQLAlchemy(app)
 SYSTEM_RESET_TOKEN=os.getenv("SYSTEM_RESET_TOKEN","").strip()
+CANDIDATE_ELIGIBILITY_TOKEN=os.getenv("CANDIDATE_ELIGIBILITY_TOKEN",SYSTEM_RESET_TOKEN).strip()
 
 COUNTY_MAIN=os.getenv("COUNTY_MAIN_FILENAME","county_main.csv")
 AUTH_USERNAME=os.getenv("AUTH_USERNAME","admin")
@@ -126,6 +127,19 @@ def api_admin_reset_test_data():
     state.locked_by=None
     db.session.commit()
     return jsonify({"ok":True,"deleted_candidates":deleted})
+
+@app.get("/api/internal/candidate-registration/<national_id>")
+def api_internal_candidate_registration(national_id):
+    """Tell trusted services whether an ID has any candidate record."""
+    supplied=request.headers.get("Authorization","")
+    expected="Bearer "+CANDIDATE_ELIGIBILITY_TOKEN
+    if not CANDIDATE_ELIGIBILITY_TOKEN or not hmac.compare_digest(supplied,expected):
+        return jsonify({"ok":False,"error":"Unauthorized"}),403
+    normalized=re.sub(r"\D","",str(national_id or ""))
+    if not normalized:
+        return jsonify({"ok":False,"error":"A valid National ID is required."}),400
+    candidate=Candidate.query.filter_by(national_id=normalized).first()
+    return jsonify({"ok":True,"registered":bool(candidate)})
 
 def require_login():
     if not logged_in():
