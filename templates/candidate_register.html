@@ -5,10 +5,11 @@
 <h2>Start a New Candidate Application</h2>
 <p>Enter your National ID and the phone number registered in ODM Membership Registration. After your identity is confirmed, the new application form will open.</p>
 {% if error %}<div class=error>{{error}}</div>{% endif %}
-<form method=post>
+<form method=post autocomplete=off>
 <label>National ID</label><input name=national_id inputmode=numeric autocomplete=off required>
-<label>Registered Phone Number</label><input name=phone type=tel autocomplete=tel required>
+<label>Registered Phone Number</label><input id=registered_phone name=phone type=tel inputmode=tel autocomplete=off autocapitalize=off spellcheck=false data-lpignore=true data-1p-ignore required>
 <button>Verify and Start Registration</button>
 </form>
 <p class=muted>Only verified ODM members without an existing candidate application can start a new registration.</p>
 </div></div>
+<script>window.addEventListener('pageshow',()=>{const phone=document.getElementById('registered_phone');if(phone)phone.value='';});</script>
