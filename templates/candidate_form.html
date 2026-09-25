@@ -50,12 +50,12 @@
 <div class="candidate-photo-field">
 <label>Passport Photo</label>
 <input type="file" id="photo_input" accept="image/jpeg,image/png,image/webp,image/*" {% if existing_candidate and not (pending_document_edit or correction_photo) %}disabled{% endif %} {% if not candidate or not candidate.photo or correction_photo %}required{% endif %}>
-<small class="muted">{% if pending_document_edit %}Optional: select, crop and confirm a replacement passport photo.{% elif correction_photo %}Open for correction: select and crop a fresh passport photo.{% elif existing_candidate %}Passport photo is locked for this application status.{% else %}Required. Select an image, crop it and click “Crop &amp; Use Photo” before saving.{% endif %} A valid photo must show exactly one clear, front-facing face on a plain white or orange background.</small>
+<small class="muted">{% if pending_document_edit %}Optional: select, crop and confirm a replacement passport photo.{% elif correction_photo %}Open for correction: select and crop a fresh passport photo.{% elif existing_candidate %}Passport photo is locked for this application status.{% else %}Required. Select an image, crop it and click “Crop &amp; Use Photo” before saving.{% endif %} A valid photo must show exactly one clear, front-facing candidate face on a plain background of any colour. Busy backgrounds, scenery, patterns, text, objects and photos without a candidate face are not accepted.</small>
 <input type="hidden" name="cropped_photo" id="cropped_photo">
 
 <div id="cropper_wrap" class="cropper-wrap" hidden>
   <h3>Crop Passport Photo</h3>
-  <p class="muted">Drag the picture inside the frame and use the zoom slider. Centre one clear, front-facing face and retain enough plain white or orange background. The area inside the frame is exactly what will be validated and saved.</p>
+  <p class="muted">Drag the picture inside the frame and use the zoom slider. Centre one clear, front-facing candidate face and retain enough plain background of any colour. The area inside the frame is exactly what will be validated and saved.</p>
   <div class="crop-stage">
     <canvas id="crop_canvas" width="400" height="500"></canvas>
   </div>
@@ -220,4 +220,4 @@ candidateForm.addEventListener('submit',e=>{
 
 
 </script>
-<script src="/static/photo_cropper.js?v=24"></script>
+<script src="/static/photo_cropper.js?v=32"></script>

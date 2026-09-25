@@ -1,5 +1,5 @@
 
-# V1.27: passport-photo-only candidate applications.
+# V1.32: candidate photos may use a plain background of any colour.
 import os, csv, re, uuid, base64, hmac, time, json
 from datetime import datetime, timezone
 from io import BytesIO, StringIO
@@ -223,7 +223,7 @@ _FACE_CASCADE=cv2.CascadeClassifier(
 )
 
 def validated_candidate_photo(cropped_photo):
-    """Decode a crop and require one clear face on white or orange."""
+    """Decode a crop and require one clear face on a plain background."""
     try:
         header,encoded=str(cropped_photo or "").split(",",1)
         if header.lower() not in {"data:image/jpeg;base64","data:image/jpg;base64"}:
@@ -270,27 +270,34 @@ def validated_candidate_photo(cropped_photo):
     if face_gray.size==0 or cv2.Laplacian(face_gray,cv2.CV_64F).var()<38:
         raise ValueError("The face appears blurred. Upload a sharper photograph with good lighting.")
 
-    # Sample the outer area where the passport-photo background should be
+    # Inspect the outer area where the passport-photo background should be
     # visible, excluding the lower centre where shoulders normally appear.
+    # Background colour is deliberately unrestricted. A plain wall, sheet or
+    # studio background of any colour may contain gentle lighting gradients;
+    # scenery, patterns and other detailed backgrounds create many local edges.
     border=np.zeros((height,width),dtype=bool)
     border[:max(1,int(height*0.16)),:]=True
     side=max(1,int(width*0.11))
     side_bottom=max(1,int(height*0.72))
     border[:side_bottom,:side]=True
     border[:side_bottom,width-side:]=True
-    pixels=image[border]
-    hsv=cv2.cvtColor(pixels.reshape(-1,1,3),cv2.COLOR_BGR2HSV).reshape(-1,3)
-    bgr=pixels.astype(np.int16)
-    channel_spread=bgr.max(axis=1)-bgr.min(axis=1)
-    white=(bgr.min(axis=1)>=185)&(channel_spread<=55)
-    # OpenCV hue uses 0..179. Accept light/dark ODM-style orange while
-    # excluding red, yellow, brown and skin tones.
-    orange=(hsv[:,0]>=5)&(hsv[:,0]<=23)&(hsv[:,1]>=85)&(hsv[:,2]>=105)
-    white_ratio=float(white.mean())
-    orange_ratio=float(orange.mean())
-    allowed_ratio=float((white|orange).mean())
-    if allowed_ratio<0.68 or max(white_ratio,orange_ratio)<0.52:
-        raise ValueError("Use a plain white or orange background with no scenery, patterns or other people.")
+    background_gray=cv2.GaussianBlur(gray,(5,5),0)
+    background_edges=cv2.Canny(background_gray,45,135)
+    edge_ratio=float((background_edges[border]>0).mean())
+
+    # Compare nearby pixels rather than requiring one exact colour. This lets
+    # smooth shadows and gradients pass but detects wallpaper, objects, text
+    # and scenery. The 95th percentile prevents a few compression artefacts
+    # from rejecting an otherwise plain photograph.
+    lab=cv2.cvtColor(cv2.GaussianBlur(image,(9,9),0),cv2.COLOR_BGR2LAB).astype(np.int16)
+    horizontal=np.linalg.norm(lab[:,4:]-lab[:,:-4],axis=2)
+    vertical=np.linalg.norm(lab[4:]-lab[:-4],axis=2)
+    horizontal_mask=border[:,4:]&border[:,:-4]
+    vertical_mask=border[4:]&border[:-4]
+    local_changes=np.concatenate((horizontal[horizontal_mask],vertical[vertical_mask]))
+    local_change_95=float(np.percentile(local_changes,95)) if local_changes.size else 999.0
+    if edge_ratio>0.105 or local_change_95>31.0:
+        raise ValueError("Use a plain background of any colour with no scenery, patterns, text, objects or other people.")
 
     return data,"image/jpeg"
 

@@ -169,26 +169,27 @@
     }
     function finish(){ dragging=false; }
 
-    function backgroundLooksAllowed(){
+    function backgroundLooksPlain(){
       // Fast browser pre-check. The server repeats the authoritative test.
       const imageData=ctx.getImageData(0,0,canvas.width,canvas.height).data;
-      let sampled=0, allowed=0, white=0, orange=0;
-      for(let py=0;py<Math.floor(canvas.height*.72);py+=4){
-        for(let px=0;px<canvas.width;px+=4){
+      let sampled=0, abrupt=0;
+      const colourDistance=function(i,j){
+        return Math.abs(imageData[i]-imageData[j])+
+          Math.abs(imageData[i+1]-imageData[j+1])+
+          Math.abs(imageData[i+2]-imageData[j+2]);
+      };
+      for(let py=0;py<Math.floor(canvas.height*.72)-8;py+=4){
+        for(let px=0;px<canvas.width-8;px+=4){
           const inBorder=py<canvas.height*.16 || px<canvas.width*.11 || px>=canvas.width*.89;
           if(!inBorder)continue;
           const i=(py*canvas.width+px)*4;
-          const r=imageData[i],g=imageData[i+1],b=imageData[i+2];
-          const spread=Math.max(r,g,b)-Math.min(r,g,b);
-          const isWhite=Math.min(r,g,b)>=185 && spread<=55;
-          const isOrange=r>=145 && g>=55 && g<=190 && b<=115 && r>=g*1.15;
+          const right=(py*canvas.width+px+8)*4;
+          const down=((py+8)*canvas.width+px)*4;
           sampled++;
-          if(isWhite)white++;
-          if(isOrange)orange++;
-          if(isWhite||isOrange)allowed++;
+          if(colourDistance(i,right)>105 || colourDistance(i,down)>105)abrupt++;
         }
       }
-      return sampled>0 && allowed/sampled>=.64 && Math.max(white,orange)/sampled>=.48;
+      return sampled>0 && abrupt/sampled<.11;
     }
 
     canvas.addEventListener('mousedown',begin);
@@ -205,11 +206,11 @@
         return;
       }
       draw();
-      if(!backgroundLooksAllowed()){
+      if(!backgroundLooksPlain()){
         hidden.value='';
         previewWrap.hidden=true;
         status.className='lookup-status lookup-error';
-        status.textContent='Use a plain white or orange background with no scenery, patterns or other people.';
+        status.textContent='Use a plain background of any colour with no scenery, patterns, text, objects or other people.';
         return;
       }
       const result=canvas.toDataURL('image/jpeg',0.88);
@@ -217,7 +218,7 @@
       preview.src=result;
       previewWrap.hidden=false;
       status.className='lookup-status lookup-success';
-      status.textContent='✓ Background pre-check passed. The server will also verify one clear face before saving.';
+      status.textContent='✓ Plain-background pre-check passed. The server will also verify one clear candidate face before saving.';
       previewWrap.scrollIntoView({behavior:'smooth',block:'center'});
     });
 
