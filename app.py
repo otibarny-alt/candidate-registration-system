@@ -581,7 +581,7 @@ def _membership_from_master_register(national_id):
     }
 
 def lookup_membership(national_id):
-    """Use PostgreSQL master_voters; optionally retain legacy fallback."""
+    """Use master_voters first, then retain eligible pre-migration Kobo members."""
     if MASTER_REGISTER_DATABASE_URL:
         try:
             member=_membership_from_master_register(national_id)
@@ -591,8 +591,6 @@ def lookup_membership(national_id):
             member=None
         if member:
             return member
-        if MASTER_REGISTER_STRICT:
-            return None
     elif MASTER_REGISTER_STRICT:
         raise RuntimeError("MASTER_REGISTER_DATABASE_URL is not configured in Render.")
     live_error=None
@@ -906,7 +904,7 @@ def api_member_lookup():
         return jsonify({
             "ok":False,
             "not_found":True,
-            "error":"National ID not found in Kobo submissions or membership_registration.csv. The applicant must first be registered as a member before candidate registration can continue."
+            "error":"National ID not found in the master voters register, Kobo submissions or membership_registration.csv. The applicant must first be registered as a member before candidate registration can continue."
         }), 404
 
     existing=existing_candidate_for_national_id(national_id)
@@ -1077,7 +1075,7 @@ def save_candidate(c):
     if not member:
         return render_candidate_form_page(
             c,
-            error="National ID not found in Kobo submissions or membership_registration.csv. The applicant must first be registered as a member."
+            error="National ID not found in the master voters register, Kobo submissions or membership_registration.csv. The applicant must first be registered as a member."
         )
 
     # Membership-controlled fields come from Kobo, not manual data entry.
