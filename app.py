@@ -277,10 +277,24 @@ def validated_candidate_photo(cropped_photo):
         if not duplicate:faces.append((cx,cy,cw,ch))
     if len(faces)==0:
         raise ValueError("No clear front-facing face was detected. Use a passport-style photograph.")
-    if len(faces)>1:
-        raise ValueError("More than one face was detected. Passport Photo must show only the applicant.")
+    # The largest detection is the candidate. Small non-overlapping Haar
+    # detections frequently occur in textured hair, lapels, necklaces and
+    # shadows. Reject only a second plausible face with meaningful size.
+    faces.sort(key=lambda box:int(box[2])*int(box[3]),reverse=True)
+    primary=faces[0]
+    primary_area=float(primary[2]*primary[3])
+    significant=[primary]
+    for candidate in faces[1:]:
+        cx,cy,cw,ch=candidate
+        centre_x=cx+cw/2
+        centre_y=cy+ch/2
+        plausible_position=(width*0.04<=centre_x<=width*0.96 and height*0.05<=centre_y<=height*0.72)
+        plausible_size=(cw*ch>=primary_area*0.30 and cw>=min_face and ch>=min_face)
+        if plausible_position and plausible_size:significant.append(candidate)
+    if len(significant)>1:
+        raise ValueError("More than one candidate-sized face was detected. Passport Photo must show only the applicant.")
 
-    x,y,face_width,face_height=[int(value) for value in faces[0]]
+    x,y,face_width,face_height=[int(value) for value in primary]
     face_ratio=(face_width*face_height)/float(width*height)
     if face_ratio<0.055:
         raise ValueError("The face is too small. Crop closer so the face is clearly visible.")
