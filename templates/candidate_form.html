@@ -72,7 +72,10 @@
 <div id="cropped_preview_wrap" class="cropped-preview-wrap" hidden>
   <b>Cropped photo to be saved:</b>
   <img id="cropped_preview" class="cropped-preview" alt="Cropped passport photo preview">
-  <div class="lookup-status lookup-success">✓ Crop confirmed. This is the photo that will be stored.</div>
+  <div class="lookup-status lookup-success">✓ Crop confirmed. Complete submission using the button below.</div>
+  {% if not list_locked and (not existing_candidate or candidate.approval_status=='not_submitted' or pending_document_edit or correction_photo) %}
+  <button type="submit" id="photo_submit_btn" class="photo-final-submit">{% if pending_document_edit %}Save Passport Photo Change{% elif correction_photo %}Submit Corrected Passport Photo{% else %}Validate Photo &amp; Submit Application{% endif %}</button>
+  {% endif %}
 </div>
 
 {% if candidate and candidate.photo %}
@@ -220,4 +223,4 @@ candidateForm.addEventListener('submit',e=>{
 
 
 </script>
-<script src="/static/photo_cropper.js?v=34"></script>
+<script src="/static/photo_cropper.js?v=35"></script>

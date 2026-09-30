@@ -218,9 +218,11 @@ def validated_image_upload(upload, field_label, max_bytes=5*1024*1024):
         raise ValueError(f"{field_label} must be a valid JPG, PNG or WebP image.")
     return data, mime
 
-_FACE_CASCADE=cv2.CascadeClassifier(
-    os.path.join(cv2.data.haarcascades,"haarcascade_frontalface_default.xml")
-)
+_FACE_CASCADES=[cv2.CascadeClassifier(os.path.join(cv2.data.haarcascades,name)) for name in (
+    "haarcascade_frontalface_default.xml",
+    "haarcascade_frontalface_alt2.xml",
+    "haarcascade_frontalface_alt.xml",
+)]
 
 def validated_candidate_photo(cropped_photo):
     """Decode a crop and require one clear face on a plain background."""
@@ -242,14 +244,21 @@ def validated_candidate_photo(cropped_photo):
     height,width=image.shape[:2]
     if width<300 or height<375:
         raise ValueError("Passport Photo is too small. Use a clearer, higher-resolution photograph.")
-    if _FACE_CASCADE.empty():
+    if all(cascade.empty() for cascade in _FACE_CASCADES):
         raise RuntimeError("Passport photo validation is temporarily unavailable. Please contact the administrator.")
 
     gray=cv2.equalizeHist(cv2.cvtColor(image,cv2.COLOR_BGR2GRAY))
     min_face=max(44,int(min(width,height)*0.12))
-    raw_faces=_FACE_CASCADE.detectMultiScale(
-        gray,scaleFactor=1.06,minNeighbors=3,minSize=(min_face,min_face)
-    )
+    raw_faces=[]
+    # Try increasingly tolerant frontal-face models. Stop at the first model
+    # that detects a face so the same face is not counted once per model.
+    for cascade in _FACE_CASCADES:
+        if cascade.empty():continue
+        detected=cascade.detectMultiScale(
+            gray,scaleFactor=1.06,minNeighbors=3,minSize=(min_face,min_face)
+        )
+        if len(detected):
+            raw_faces=detected;break
     # Haar cascades can return two strongly overlapping boxes for the same
     # person, especially after a small source portrait is enlarged by the
     # cropper. Merge those duplicates but retain genuinely separate faces.

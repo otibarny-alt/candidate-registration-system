@@ -222,7 +222,7 @@
       preview.src=result;
       previewWrap.hidden=false;
       status.className='lookup-status lookup-success';
-      status.textContent='✓ Plain-background pre-check passed. The server will also verify one clear candidate face before saving.';
+      status.textContent='✓ Photo crop accepted. Click the submission button directly below the preview to save it.';
       previewWrap.scrollIntoView({behavior:'smooth',block:'center'});
     });
 
