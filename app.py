@@ -246,10 +246,26 @@ def validated_candidate_photo(cropped_photo):
         raise RuntimeError("Passport photo validation is temporarily unavailable. Please contact the administrator.")
 
     gray=cv2.equalizeHist(cv2.cvtColor(image,cv2.COLOR_BGR2GRAY))
-    min_face=max(48,int(min(width,height)*0.14))
-    faces=_FACE_CASCADE.detectMultiScale(
-        gray,scaleFactor=1.08,minNeighbors=4,minSize=(min_face,min_face)
+    min_face=max(44,int(min(width,height)*0.12))
+    raw_faces=_FACE_CASCADE.detectMultiScale(
+        gray,scaleFactor=1.06,minNeighbors=3,minSize=(min_face,min_face)
     )
+    # Haar cascades can return two strongly overlapping boxes for the same
+    # person, especially after a small source portrait is enlarged by the
+    # cropper. Merge those duplicates but retain genuinely separate faces.
+    faces=[]
+    for candidate in sorted(raw_faces,key=lambda box:int(box[2])*int(box[3]),reverse=True):
+        cx,cy,cw,ch=[int(value) for value in candidate]
+        duplicate=False
+        for kept in faces:
+            kx,ky,kw,kh=kept
+            ix=max(0,min(cx+cw,kx+kw)-max(cx,kx))
+            iy=max(0,min(cy+ch,ky+kh)-max(cy,ky))
+            intersection=ix*iy
+            union=cw*ch+kw*kh-intersection
+            if union and intersection/union>0.35:
+                duplicate=True;break
+        if not duplicate:faces.append((cx,cy,cw,ch))
     if len(faces)==0:
         raise ValueError("No clear front-facing face was detected. Use a passport-style photograph.")
     if len(faces)>1:
@@ -267,7 +283,7 @@ def validated_candidate_photo(cropped_photo):
         raise ValueError("Center the applicant's face in the passport-photo frame and crop again.")
 
     face_gray=gray[max(0,y):min(height,y+face_height),max(0,x):min(width,x+face_width)]
-    if face_gray.size==0 or cv2.Laplacian(face_gray,cv2.CV_64F).var()<38:
+    if face_gray.size==0 or cv2.Laplacian(face_gray,cv2.CV_64F).var()<12:
         raise ValueError("The face appears blurred. Upload a sharper photograph with good lighting.")
 
     # Inspect the outer area where the passport-photo background should be
@@ -281,6 +297,13 @@ def validated_candidate_photo(cropped_photo):
     side_bottom=max(1,int(height*0.72))
     border[:side_bottom,:side]=True
     border[:side_bottom,width-side:]=True
+    # Hair, ears, clothing and shoulders legitimately reach the top/side crop
+    # areas in passport portraits. Remove a generous person silhouette around
+    # the detected face so those edges are never mistaken for background.
+    person_left=max(0,int(x-face_width*1.45))
+    person_right=min(width,int(x+face_width*2.45))
+    person_top=max(0,int(y-face_height*1.15))
+    border[person_top:,person_left:person_right]=False
     background_gray=cv2.GaussianBlur(gray,(5,5),0)
     background_edges=cv2.Canny(background_gray,45,135)
     edge_ratio=float((background_edges[border]>0).mean())
@@ -296,7 +319,7 @@ def validated_candidate_photo(cropped_photo):
     vertical_mask=border[4:]&border[:-4]
     local_changes=np.concatenate((horizontal[horizontal_mask],vertical[vertical_mask]))
     local_change_95=float(np.percentile(local_changes,95)) if local_changes.size else 999.0
-    if edge_ratio>0.105 or local_change_95>31.0:
+    if edge_ratio>0.16 or local_change_95>42.0:
         raise ValueError("Use a plain background of any colour with no scenery, patterns, text, objects or other people.")
 
     return data,"image/jpeg"

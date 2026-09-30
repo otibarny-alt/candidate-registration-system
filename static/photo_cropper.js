@@ -178,9 +178,13 @@
           Math.abs(imageData[i+1]-imageData[j+1])+
           Math.abs(imageData[i+2]-imageData[j+2]);
       };
-      for(let py=0;py<Math.floor(canvas.height*.72)-8;py+=4){
+      // Inspect only outer corner/background areas. Hair and shoulders often
+      // touch the top-centre and side-centre of a valid passport portrait.
+      for(let py=0;py<Math.floor(canvas.height*.55)-8;py+=4){
         for(let px=0;px<canvas.width-8;px+=4){
-          const inBorder=py<canvas.height*.16 || px<canvas.width*.11 || px>=canvas.width*.89;
+          const inTopCorner=py<canvas.height*.18 && (px<canvas.width*.25 || px>=canvas.width*.75);
+          const inSideCorner=py<canvas.height*.45 && (px<canvas.width*.07 || px>=canvas.width*.93);
+          const inBorder=inTopCorner || inSideCorner;
           if(!inBorder)continue;
           const i=(py*canvas.width+px)*4;
           const right=(py*canvas.width+px+8)*4;
@@ -189,7 +193,7 @@
           if(colourDistance(i,right)>105 || colourDistance(i,down)>105)abrupt++;
         }
       }
-      return sampled>0 && abrupt/sampled<.11;
+      return sampled>0 && abrupt/sampled<.18;
     }
 
     canvas.addEventListener('mousedown',begin);
