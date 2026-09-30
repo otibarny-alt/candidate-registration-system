@@ -225,7 +225,7 @@ _FACE_CASCADES=[cv2.CascadeClassifier(os.path.join(cv2.data.haarcascades,name)) 
 )]
 
 def validated_candidate_photo(cropped_photo):
-    """Decode a crop and require one clear face on a plain background."""
+    """Decode a crop and require a readable candidate portrait."""
     try:
         header,encoded=str(cropped_photo or "").split(",",1)
         if header.lower() not in {"data:image/jpeg;base64","data:image/jpg;base64"}:
@@ -308,42 +308,6 @@ def validated_candidate_photo(cropped_photo):
     face_gray=gray[max(0,y):min(height,y+face_height),max(0,x):min(width,x+face_width)]
     if face_gray.size==0 or cv2.Laplacian(face_gray,cv2.CV_64F).var()<12:
         raise ValueError("The face appears blurred. Upload a sharper photograph with good lighting.")
-
-    # Inspect the outer area where the passport-photo background should be
-    # visible, excluding the lower centre where shoulders normally appear.
-    # Background colour is deliberately unrestricted. A plain wall, sheet or
-    # studio background of any colour may contain gentle lighting gradients;
-    # scenery, patterns and other detailed backgrounds create many local edges.
-    border=np.zeros((height,width),dtype=bool)
-    border[:max(1,int(height*0.16)),:]=True
-    side=max(1,int(width*0.11))
-    side_bottom=max(1,int(height*0.72))
-    border[:side_bottom,:side]=True
-    border[:side_bottom,width-side:]=True
-    # Hair, ears, clothing and shoulders legitimately reach the top/side crop
-    # areas in passport portraits. Remove a generous person silhouette around
-    # the detected face so those edges are never mistaken for background.
-    person_left=max(0,int(x-face_width*1.45))
-    person_right=min(width,int(x+face_width*2.45))
-    person_top=max(0,int(y-face_height*1.15))
-    border[person_top:,person_left:person_right]=False
-    background_gray=cv2.GaussianBlur(gray,(5,5),0)
-    background_edges=cv2.Canny(background_gray,45,135)
-    edge_ratio=float((background_edges[border]>0).mean())
-
-    # Compare nearby pixels rather than requiring one exact colour. This lets
-    # smooth shadows and gradients pass but detects wallpaper, objects, text
-    # and scenery. The 95th percentile prevents a few compression artefacts
-    # from rejecting an otherwise plain photograph.
-    lab=cv2.cvtColor(cv2.GaussianBlur(image,(9,9),0),cv2.COLOR_BGR2LAB).astype(np.int16)
-    horizontal=np.linalg.norm(lab[:,4:]-lab[:,:-4],axis=2)
-    vertical=np.linalg.norm(lab[4:]-lab[:-4],axis=2)
-    horizontal_mask=border[:,4:]&border[:,:-4]
-    vertical_mask=border[4:]&border[:-4]
-    local_changes=np.concatenate((horizontal[horizontal_mask],vertical[vertical_mask]))
-    local_change_95=float(np.percentile(local_changes,95)) if local_changes.size else 999.0
-    if edge_ratio>0.16 or local_change_95>42.0:
-        raise ValueError("Use a plain background of any colour with no scenery, patterns, text, objects or other people.")
 
     return data,"image/jpeg"
 

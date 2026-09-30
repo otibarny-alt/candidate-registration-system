@@ -169,33 +169,6 @@
     }
     function finish(){ dragging=false; }
 
-    function backgroundLooksPlain(){
-      // Fast browser pre-check. The server repeats the authoritative test.
-      const imageData=ctx.getImageData(0,0,canvas.width,canvas.height).data;
-      let sampled=0, abrupt=0;
-      const colourDistance=function(i,j){
-        return Math.abs(imageData[i]-imageData[j])+
-          Math.abs(imageData[i+1]-imageData[j+1])+
-          Math.abs(imageData[i+2]-imageData[j+2]);
-      };
-      // Inspect only outer corner/background areas. Hair and shoulders often
-      // touch the top-centre and side-centre of a valid passport portrait.
-      for(let py=0;py<Math.floor(canvas.height*.55)-8;py+=4){
-        for(let px=0;px<canvas.width-8;px+=4){
-          const inTopCorner=py<canvas.height*.18 && (px<canvas.width*.25 || px>=canvas.width*.75);
-          const inSideCorner=py<canvas.height*.45 && (px<canvas.width*.07 || px>=canvas.width*.93);
-          const inBorder=inTopCorner || inSideCorner;
-          if(!inBorder)continue;
-          const i=(py*canvas.width+px)*4;
-          const right=(py*canvas.width+px+8)*4;
-          const down=((py+8)*canvas.width+px)*4;
-          sampled++;
-          if(colourDistance(i,right)>105 || colourDistance(i,down)>105)abrupt++;
-        }
-      }
-      return sampled>0 && abrupt/sampled<.18;
-    }
-
     canvas.addEventListener('mousedown',begin);
     canvas.addEventListener('mousemove',move);
     window.addEventListener('mouseup',finish);
@@ -210,19 +183,12 @@
         return;
       }
       draw();
-      if(!backgroundLooksPlain()){
-        hidden.value='';
-        previewWrap.hidden=true;
-        status.className='lookup-status lookup-error';
-        status.textContent='Use a plain background of any colour with no scenery, patterns, text, objects or other people.';
-        return;
-      }
       const result=canvas.toDataURL('image/jpeg',0.88);
       hidden.value=result;
       preview.src=result;
       previewWrap.hidden=false;
       status.className='lookup-status lookup-success';
-      status.textContent='✓ Photo crop accepted. Click the submission button directly below the preview to save it.';
+      status.textContent='✓ Photo crop accepted. Background checking is disabled. Click the submission button below the preview to save it.';
       previewWrap.scrollIntoView({behavior:'smooth',block:'center'});
     });
 
