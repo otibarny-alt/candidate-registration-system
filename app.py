@@ -11,12 +11,16 @@ from psycopg.rows import dict_row
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response, abort
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect, text, func
+from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.security import check_password_hash
 
 app=Flask(__name__)
 app.secret_key=os.getenv("FLASK_SECRET_KEY","candidate-portal-change-me")
 
-db_url=os.getenv("DATABASE_URL","sqlite:///candidates.db")
+db_url=(os.getenv("CANDIDATE_DATABASE_URL","").strip()
+        or os.getenv("MASTER_REGISTER_DATABASE_URL","").strip()
+        or os.getenv("DATABASE_URL","").strip()
+        or "sqlite:///candidates.db")
 # Render provides a PostgreSQL URL without an explicit driver.
 # This application installs Psycopg 3, so tell SQLAlchemy to use it.
 if db_url.startswith("postgres://"):
@@ -116,6 +120,16 @@ def logged_in():
 
 def candidate_logged_in():
     return bool(session.get("candidate_national_id"))
+
+@app.errorhandler(SQLAlchemyError)
+def candidate_database_error(exc):
+    """Keep candidate database outages off the generic white HTTP 500 page."""
+    app.logger.exception("Candidate portal database request failed")
+    try:db.session.rollback()
+    except Exception:pass
+    if request.path.startswith("/api/"):
+        return jsonify({"ok":False,"error":"The candidate registration database is temporarily unavailable."}),503
+    return render_template("database_unavailable.html"),503
 
 @app.post("/api/admin/reset-test-data")
 def api_admin_reset_test_data():
