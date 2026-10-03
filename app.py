@@ -50,6 +50,36 @@ _MEMBERSHIP_CSV_CACHE={"loaded_at":0.0,"rows":{}}
 MASTER_REGISTER_DATABASE_URL=os.getenv("MASTER_REGISTER_DATABASE_URL","").strip()
 MASTER_REGISTER_STRICT=os.getenv("MASTER_REGISTER_STRICT","true").strip().lower() in {"1","true","yes","on"}
 
+def set_master_membership_type(national_id,membership_type):
+    """Reflect an approved candidate classification in the shared voters register."""
+    national_id=re.sub(r"\D","",str(national_id or ""))
+    if not MASTER_REGISTER_DATABASE_URL:
+        raise RuntimeError("MASTER_REGISTER_DATABASE_URL is not configured.")
+    if not national_id:
+        raise ValueError("The candidate has no valid National ID.")
+    with psycopg.connect(MASTER_REGISTER_DATABASE_URL,connect_timeout=5) as conn:
+        with conn.cursor() as cur:
+            cur.execute("ALTER TABLE master_voters ADD COLUMN IF NOT EXISTS membership_type TEXT NOT NULL DEFAULT 'Ordinary Member'")
+            cur.execute("""UPDATE master_voters SET membership_type=%s,updated_at=NOW()
+                           WHERE active AND national_id=%s""",(membership_type,national_id))
+            if cur.rowcount!=1:
+                raise ValueError("The candidate National ID was not found in the active voters register.")
+        conn.commit()
+
+def sync_approved_candidate_membership_types():
+    ids=[re.sub(r"\D","",str(row.national_id or "")) for row in Candidate.query.filter_by(approval_status="approved").all()]
+    ids=sorted({value for value in ids if value})
+    if not ids or not MASTER_REGISTER_DATABASE_URL:
+        return 0
+    with psycopg.connect(MASTER_REGISTER_DATABASE_URL,connect_timeout=5) as conn:
+        with conn.cursor() as cur:
+            cur.execute("ALTER TABLE master_voters ADD COLUMN IF NOT EXISTS membership_type TEXT NOT NULL DEFAULT 'Ordinary Member'")
+            cur.execute("""UPDATE master_voters SET membership_type='Life Member',updated_at=NOW()
+                           WHERE active AND national_id=ANY(%s)""",(ids,))
+            changed=cur.rowcount
+        conn.commit()
+    return changed
+
 POSITIONS=[
  ("president","President","national"),
  ("governor","Governor","county"),
@@ -114,6 +144,10 @@ with app.app_context():
         "(photo IS NULL OR photo_validated=FALSE)"
     ))
     db.session.commit()
+    try:
+        sync_approved_candidate_membership_types()
+    except Exception as exc:
+        app.logger.warning("Approved candidate membership types could not be synchronized at startup: %s",exc)
 
 def logged_in():
     return bool(session.get("admin"))
@@ -880,9 +914,20 @@ def candidate_decision(candidate_id):
     if candidate_list_is_final():
         session["candidate_admin_error"]="The candidate list became FINAL. The application decision was not changed."
         return return_to_filtered_dashboard()
+    previous_decision=c.approval_status
+    previous_rejection_reason=c.rejection_reason
     c.approval_status=decision
     c.rejection_reason=rejection_reason if decision=="rejected" else None
     db.session.commit()
+    if decision=="approved":
+        try:
+            set_master_membership_type(c.national_id,"Life Member")
+        except Exception as exc:
+            c.approval_status=previous_decision
+            c.rejection_reason=previous_rejection_reason
+            db.session.commit()
+            session["candidate_admin_error"]="Candidate approval was not saved because the voters register could not be updated: "+str(exc)
+            return return_to_filtered_dashboard()
     return return_to_filtered_dashboard()
 
 @app.get("/api/hierarchy")
