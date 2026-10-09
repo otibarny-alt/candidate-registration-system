@@ -1,49 +1,30 @@
 <!doctype html>
 <html lang="en">
 <head>
- <meta charset="utf-8">
- <meta name="viewport" content="width=device-width,initial-scale=1">
+ <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
  <title>ODM 2027 Nominations Main Dashboard</title>
  <link rel="stylesheet" href="{{ url_for('static',filename='style.css') }}">
  <style>
-  .nav-shell{max-width:1180px;margin:28px auto;padding:0 18px 38px}
-  .nav-hero{background:#fff;border:1px solid #ddd;border-radius:16px;padding:24px;box-shadow:0 5px 24px #0001;text-align:center}
-  .nav-hero .candidate-portal-banner{max-height:126px;margin-bottom:16px}
-  .nav-hero h1{margin:4px 0 8px;font-size:30px}.nav-hero p{margin:0;color:#56606a;font-size:16px}
-  .nav-group{margin-top:28px}.nav-group h2{margin:0 0 13px;padding-left:13px;border-left:6px solid #ef7d00}
-  .nav-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
-  .nav-tile{display:flex;flex-direction:column;min-height:190px;padding:20px;background:#fff;border:1px solid #d8dce0;border-radius:14px;box-shadow:0 4px 16px #0000000d;text-decoration:none;color:#111;transition:transform .15s,box-shadow .15s,border-color .15s}
-  .nav-tile:hover,.nav-tile:focus{transform:translateY(-2px);box-shadow:0 8px 24px #0002;border-color:#ef7d00;outline:none}
-  .nav-icon{display:inline-grid;place-items:center;align-self:flex-start;min-width:48px;height:42px;padding:0 9px;border-radius:9px;background:#111;color:#fff;border:3px solid #ef7d00;font-weight:900;font-size:13px}
-  .nav-tile h3{margin:14px 0 8px;font-size:19px}.nav-tile p{margin:0 0 18px;color:#59636e;line-height:1.4;flex:1}
-  .nav-open{font-weight:850;color:#8a3d00}.nav-note{margin:26px 0 0;text-align:center;color:#68727c;font-size:13px}
+  .nav-shell{max-width:1120px;margin:18px auto;padding:0 14px 28px}.nav-hero{background:#fff;border:1px solid #ddd;border-radius:14px;padding:15px 20px;box-shadow:0 4px 18px #0001;text-align:center}.nav-hero .candidate-portal-banner{max-height:96px;margin-bottom:7px}.nav-hero h1{margin:2px 0 4px;font-size:25px}.nav-hero p{margin:0;color:#56606a;font-size:14px}.nav-accordions{display:grid;gap:11px;margin-top:16px}.nav-group{margin:0;border:1px solid #d4d9de;border-radius:12px;background:#fff;box-shadow:0 3px 12px #0000000d;overflow:hidden}.nav-group summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 17px;cursor:pointer;list-style:none;font-size:19px;font-weight:850;border-left:6px solid #ef7d00;background:#fff}.nav-group summary::-webkit-details-marker{display:none}.nav-group summary::after{content:'+';display:grid;place-items:center;width:30px;height:30px;flex:0 0 30px;border-radius:50%;background:#111;color:#fff;font-size:22px;line-height:1}.nav-group[open] summary{background:#fff4e8}.nav-group[open] summary::after{content:'−';background:#ef7d00;color:#111}.nav-group summary small{margin-left:auto;color:#68727c;font-size:12px}.nav-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;padding:12px;background:#f5f6f7;border-top:1px solid #e1e4e7}.nav-tile{display:grid;grid-template-columns:42px 1fr;grid-template-areas:'icon title' 'icon text' 'icon open';column-gap:11px;align-content:start;padding:13px;background:#fff;border:1px solid #d8dce0;border-radius:10px;text-decoration:none;color:#111;transition:transform .15s,box-shadow .15s,border-color .15s}.nav-tile:hover,.nav-tile:focus{transform:translateY(-1px);box-shadow:0 5px 15px #0002;border-color:#ef7d00;outline:none}.nav-icon{grid-area:icon;display:grid;place-items:center;width:42px;height:38px;border-radius:8px;background:#111;color:#fff;border:2px solid #ef7d00;font-weight:900;font-size:11px}.nav-tile h3{grid-area:title;margin:1px 0 4px;font-size:15px;line-height:1.2}.nav-tile p{grid-area:text;margin:0 0 8px;color:#59636e;font-size:12px;line-height:1.3}.nav-open{grid-area:open;font-size:12px;font-weight:850;color:#8a3d00}.nav-note{margin:15px 0 0;text-align:center;color:#68727c;font-size:12px}
   @media(max-width:900px){.nav-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-  @media(max-width:600px){.nav-shell{margin:14px auto;padding:0 10px 28px}.nav-hero{padding:18px 14px}.nav-hero h1{font-size:24px}.nav-grid{grid-template-columns:1fr}.nav-tile{min-height:0}}
+  @media(max-width:600px){.nav-shell{margin:8px auto;padding:0 8px 20px}.nav-hero{padding:10px 12px}.nav-hero .candidate-portal-banner{max-height:73px;margin-bottom:5px}.nav-hero h1{font-size:20px}.nav-hero p{font-size:12px}.nav-accordions{gap:8px;margin-top:10px}.nav-group summary{padding:11px 12px;font-size:16px}.nav-group summary::after{width:26px;height:26px;flex-basis:26px;font-size:19px}.nav-grid{grid-template-columns:1fr;gap:8px;padding:8px}.nav-tile{padding:10px;grid-template-columns:38px 1fr;column-gap:9px}.nav-icon{width:38px;height:34px}.nav-tile h3{font-size:14px}.nav-tile p{font-size:11px;margin-bottom:5px}}
  </style>
 </head>
 <body>
 <main class="nav-shell">
- <header class="nav-hero">
-  <img class="candidate-portal-banner" src="{{ url_for('static',filename='odm_orange_voting_banner.png') }}?v=1.44" alt="ODM 2027 Party Primaries Voting System">
-  <h1>Main Navigation Dashboard</h1>
-  <p>Choose the service you want to open.</p>
- </header>
+ <header class="nav-hero"><img class="candidate-portal-banner" src="{{ url_for('static',filename='odm_orange_voting_banner.png') }}?v=1.47" alt="ODM 2027 Party Primaries Voting System"><h1>Main Navigation Dashboard</h1><p>Select a section, then choose the service to open.</p></header>
+ <div class="nav-accordions">
  {% for group_name,items in groups %}
- <section class="nav-group">
-  <h2>{{ group_name }}</h2>
+ <details class="nav-group" {% if loop.first %}open{% endif %}>
+  <summary><span>{{ group_name }}</span><small>{{ items|length }} services</small></summary>
   <div class="nav-grid">
-   {% for item in items %}
-   <a class="nav-tile" href="{{ item.url }}">
-    <span class="nav-icon">{{ item.icon }}</span>
-    <h3>{{ item.title }}</h3>
-    <p>{{ item.description }}</p>
-    <span class="nav-open">Open service →</span>
-   </a>
-   {% endfor %}
+   {% for item in items %}<a class="nav-tile" href="{{ item.url }}"><span class="nav-icon">{{ item.icon }}</span><h3>{{ item.title }}</h3><p>{{ item.description }}</p><span class="nav-open">Open →</span></a>{% endfor %}
   </div>
- </section>
+ </details>
  {% endfor %}
- <p class="nav-note">Each terminal and protected dashboard still requires its assigned login credentials.</p>
+ </div>
+ <p class="nav-note">Protected terminals and dashboards still require their assigned credentials.</p>
 </main>
+<script>document.querySelectorAll('.nav-group').forEach(group=>{group.addEventListener('toggle',()=>{if(!group.open)return;document.querySelectorAll('.nav-group').forEach(other=>{if(other!==group)other.open=false;});});});</script>
 </body>
 </html>
