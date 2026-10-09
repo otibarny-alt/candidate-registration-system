@@ -760,7 +760,7 @@ def main_navigation_dashboard():
     services=[
         {"group":"Registration & Lookup","title":"Membership Registration","description":"Register a new member or open an existing membership record.","url":service_url(VOTING_SYSTEM_BASE_URL,"membership"),"icon":"MEM"},
         {"group":"Registration & Lookup","title":"Candidate Registration","description":"Start a candidate application or access an existing application.","url":url_for("candidate_register"),"icon":"CAN"},
-        {"group":"Registration & Lookup","title":"ID to Serial Number Lookup","description":"Sign in to the polling-station lookup terminal and retrieve a voter serial number.","url":service_url(VOTING_SYSTEM_BASE_URL,"id-serial-lookup"),"icon":"ID"},
+        {"group":"Polling Terminals","title":"ID to Serial Number Lookup","description":"Sign in to the polling-station lookup terminal and retrieve a voter serial number.","url":service_url(VOTING_SYSTEM_BASE_URL,"id-serial-lookup"),"icon":"ID"},
         {"group":"Registration & Lookup","title":"Membership / Polling Centre Lookup","description":"Use a National ID to find the voter's registered name and polling centre.","url":service_url(VOTING_SYSTEM_BASE_URL,"voter-polling-center-lookup"),"icon":"LOC"},
         {"group":"Polling Terminals","title":"Entrance Verification Terminal","description":"Log in to verify voters before they proceed to vote.","url":service_url(VERIFICATION_SYSTEM_BASE_URL,"login"),"icon":"VER"},
         {"group":"Polling Terminals","title":"Voting Terminal","description":"Log in to the station voting terminal after entrance verification is active.","url":service_url(VOTING_SYSTEM_BASE_URL,"terminal-login"),"icon":"VOTE"},
