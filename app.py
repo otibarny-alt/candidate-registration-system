@@ -45,13 +45,22 @@ _CANDIDATE_LOGIN_ATTEMPTS={}
 # Render without editing the application again.
 VOTING_SYSTEM_BASE_URL=os.getenv("VOTING_SYSTEM_BASE_URL","https://voting-simulation-system.onrender.com").strip().rstrip("/")
 VERIFICATION_SYSTEM_BASE_URL=os.getenv("VERIFICATION_SYSTEM_BASE_URL","https://odm-member-photo-verifier.onrender.com").strip().rstrip("/")
+
+def normalized_results_url(value):
+    """Repair the obsolete -results-dashboard host and open the login page."""
+    url=str(value or "").strip().rstrip("/")
+    url=url.replace("-simulation-results-dashboard.onrender.com","-simulation-results.onrender.com")
+    if url and not url.lower().endswith("/login"):
+        url=f"{url}/login"
+    return url
+
 RESULT_DASHBOARD_URLS={
-    "presidential":os.getenv("PRESIDENTIAL_RESULTS_URL","https://presidential-simulation-results-dashboard.onrender.com").strip(),
-    "gubernatorial":os.getenv("GUBERNATORIAL_RESULTS_URL","https://gubernatorial-simulation-results-dashboard.onrender.com").strip(),
-    "senatorial":os.getenv("SENATORIAL_RESULTS_URL","https://senatorial-simulation-results-dashboard.onrender.com").strip(),
-    "women_representative":os.getenv("WOMEN_REP_RESULTS_URL","https://women-representative-simulation-results-dashboard.onrender.com").strip(),
-    "mna":os.getenv("MNA_RESULTS_URL","https://mna-simulation-results-dashboard.onrender.com").strip(),
-    "mca":os.getenv("MCA_RESULTS_URL","https://mca-simulation-results-dashboard.onrender.com").strip(),
+    "presidential":normalized_results_url(os.getenv("PRESIDENTIAL_RESULTS_URL","https://presidential-simulation-results.onrender.com/login")),
+    "gubernatorial":normalized_results_url(os.getenv("GUBERNATORIAL_RESULTS_URL","https://gubernatorial-simulation-results.onrender.com/login")),
+    "senatorial":normalized_results_url(os.getenv("SENATORIAL_RESULTS_URL","https://senatorial-simulation-results.onrender.com/login")),
+    "women_representative":normalized_results_url(os.getenv("WOMEN_REP_RESULTS_URL","https://women-representative-simulation-results.onrender.com/login")),
+    "mna":normalized_results_url(os.getenv("MNA_RESULTS_URL","https://mna-simulation-results.onrender.com/login")),
+    "mca":normalized_results_url(os.getenv("MCA_RESULTS_URL","https://mca-simulation-results.onrender.com/login")),
 }
 
 def service_url(base,path=""):

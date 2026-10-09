@@ -24,14 +24,14 @@ services:
       - key: VERIFICATION_SYSTEM_BASE_URL
         value: https://odm-member-photo-verifier.onrender.com
       - key: PRESIDENTIAL_RESULTS_URL
-        value: https://presidential-simulation-results-dashboard.onrender.com
+        value: https://presidential-simulation-results.onrender.com/login
       - key: GUBERNATORIAL_RESULTS_URL
-        value: https://gubernatorial-simulation-results-dashboard.onrender.com
+        value: https://gubernatorial-simulation-results.onrender.com/login
       - key: SENATORIAL_RESULTS_URL
-        value: https://senatorial-simulation-results-dashboard.onrender.com
+        value: https://senatorial-simulation-results.onrender.com/login
       - key: WOMEN_REP_RESULTS_URL
-        value: https://women-representative-simulation-results-dashboard.onrender.com
+        value: https://women-representative-simulation-results.onrender.com/login
       - key: MNA_RESULTS_URL
-        value: https://mna-simulation-results-dashboard.onrender.com
+        value: https://mna-simulation-results.onrender.com/login
       - key: MCA_RESULTS_URL
-        value: https://mca-simulation-results-dashboard.onrender.com
+        value: https://mca-simulation-results.onrender.com/login
