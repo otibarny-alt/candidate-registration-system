@@ -1,0 +1,226 @@
+<!doctype html><link rel=stylesheet href=/static/style.css><meta name=viewport content="width=device-width,initial-scale=1">
+{% set existing_candidate = self_service and candidate %}
+{% set pending_document_edit = existing_candidate and (candidate.approval_status or 'not_submitted') in ['pending','not_submitted'] %}
+{% set correction_photo = existing_candidate and candidate.approval_status=='rejected' and candidate.rejection_reason=='improper_candidate_picture' %}
+<div class=top><b>Candidate Registration & Profile Portal</b>{% if self_service %}<a href=/candidate/logout>Candidate Logout</a>{% endif %}</div>
+<div class=wrap><div class=card><img class="candidate-portal-banner" src="{{ url_for('static', filename='odm_orange_voting_banner.png') }}" alt="ODM 2027 Party Primaries Voting System"><div class="candidate-form-heading"><h2>{{"Edit Candidate" if candidate else "Register Candidate"}}</h2>{% if not candidate %}<a class="btn status-login-link" href="{{url_for('candidate_access')}}">Already registered? View Status / Edit Application</a>{% endif %}</div>
+{% if self_service %}<div class="privacy-notice"><b>Private application:</b> You are viewing only your own candidate information.</div>{% endif %}
+{% if list_locked %}<div class="central-lock central-lock-final"><h3>🔒 FINAL CANDIDATE LIST — EDITING LOCKED</h3><p>This application is available for viewing only. No changes can be saved unless a Level 2 administrator unlocks the candidate list.</p></div>{% endif %}
+{% if self_service and candidate %}<div class="decision-notice decision-{{candidate.approval_status or 'not_submitted'}}"><b>Application status:</b> {% if candidate.approval_status=='approved' %}ACCEPTED{% elif candidate.approval_status=='rejected' %}REJECTED{% elif candidate.approval_status=='pending' %}PENDING APPROVAL{% else %}NOT SUBMITTED{% endif %}{% if candidate.approval_status == 'not_submitted' %} — the application has not been sent for administrator review. Upload a passport photo that passes validation to submit it.{% elif candidate.approval_status == 'pending' %} — your application is awaiting administrator review. The passport photo may be replaced; all other fields are locked.{% elif candidate.approval_status == 'approved' %} — your application is accepted for inclusion on the ballot. All fields are locked.{% else %} — your application is not included on the ballot.<br><b>Reason for rejection:</b> {% if candidate.rejection_reason=='improper_candidate_picture' %}Invalid passport photo. Only the passport photo is open for correction.{% else %}Contact the candidate registration administrator. No field is open until a valid reason is recorded{% endif %}.{% endif %}</div>{% endif %}
+{% if self_service and verified_member.geography_verified %}<div class="eligibility-notice"><b>Your verified voter area:</b> {{verified_member.county|replace('_',' ')|title}} · {{verified_member.constituency|replace('_',' ')|title}} · {{verified_member.ward|replace('_',' ')|title}}{% if verified_member.polling_station %}<br><b>Polling station:</b> {{verified_member.polling_station|replace('_',' ')|title}}{% endif %}<br><span>Governor, Senator and Woman Representative applications are restricted to this county; MNA to this constituency; and MCA to this ward. President is national.</span></div>{% elif self_service %}<div class="error">Your voter area could not be refreshed. Please log out and sign in again before editing a non-presidential application.</div>{% endif %}
+{% if saved %}<div class="success">Your candidate application documents have been saved successfully.</div>{% endif %}
+{% if error %}<div class=error>{{error}}</div>{% endif %}
+<form method=post enctype=multipart/form-data id=candidateForm><fieldset class="form-lock-fieldset" {% if list_locked %}disabled{% endif %}>
+<div class=grid>
+<div><label>National ID</label>
+<div class="lookup-row"><input id="national_id" name=national_id inputmode="numeric" autocomplete="off" required {% if self_service %}readonly{% endif %} value="{{candidate.national_id if candidate else (verified_member.national_id if verified_member else '')}}">{% if not self_service %}<button type="button" class="lookup-btn" id="lookup_member_btn">Lookup Member</button>{% endif %}</div>
+<div id="member_lookup_status" class="lookup-status">{% if self_service %}✓ Identity confirmed using your National ID and registered phone number.{% elif candidate %}Member data loaded from saved candidate record.{% else %}Enter the applicant's National ID first. The system will verify membership and confirm that the ID has not already submitted another candidate application.{% endif %}</div>
+</div>
+
+<div><label>Candidate ID</label>
+{% if candidate %}
+<input value="{{candidate.candidate_id}}" readonly>
+<small class="muted">System-generated ID — cannot be changed.</small>
+{% else %}
+<input value="Generated automatically when saved" readonly>
+<small class="muted">Candidate ID is created automatically after successful member verification and save.</small>
+{% endif %}
+</div>
+
+<div><label>Full Name</label><input id="full_name" name=full_name readonly required value="{{candidate.full_name if candidate else (verified_member.full_name if verified_member else '')}}">
+<small class="muted">Pulled from Kobo Membership Registration.</small></div>
+
+<div><label>Phone</label><input id="phone" name=phone readonly value="{{candidate.phone if candidate else (verified_member.phone if verified_member else '')}}"><small class="muted">Pulled from Kobo.</small></div>
+
+<div><label>Email</label><input id="email" name=email readonly value="{{candidate.email if candidate else (verified_member.email if verified_member else '')}}"><small class="muted">Pulled from the authoritative membership source when available.</small></div>
+
+<div><label>Membership No.</label><input id="membership_no" name=membership_no readonly value="{{candidate.membership_no if candidate else (verified_member.membership_no if verified_member else '')}}"><small class="muted">Pulled from Kobo.</small></div>
+
+<div><label>Position Applied For</label>
+<select name=position id=position required {% if existing_candidate %}disabled{% endif %}>
+<option value="">Select position</option>
+{% for key,label,scope in positions %}<option value="{{key}}" data-scope="{{scope}}" {% if candidate and candidate.position==key %}selected{% endif %}>{{label}}</option>{% endfor %}
+</select></div>
+{% if not self_service %}<div><label>Record Status</label><select name=status><option value=active {% if not candidate or candidate.status=="active" %}selected{% endif %}>Active</option><option value=inactive {% if candidate and candidate.status=="inactive" %}selected{% endif %}>Inactive</option></select></div>
+<div><label>Application Decision</label><select name=approval_status><option value=pending {% if not candidate or (candidate.approval_status or 'pending')=='pending' %}selected{% endif %}>Pending Review</option><option value=approved {% if candidate and candidate.approval_status=='approved' %}selected{% endif %}>Accepted — Include on Ballot</option><option value=rejected {% if candidate and candidate.approval_status=='rejected' %}selected{% endif %}>Rejected — Exclude from Ballot</option></select></div>
+<div><label>Rejection Reason</label><select name=rejection_reason><option value="">Select when rejected</option><option value="improper_candidate_picture" {% if candidate and candidate.rejection_reason=='improper_candidate_picture' %}selected{% endif %}>Invalid passport photo</option></select></div>{% endif %}
+<div id=countyBox><label>County</label><select name=county id=county {% if existing_candidate %}disabled{% endif %}><option value="">Select County</option></select></div>
+<div id=constBox><label>Constituency</label><select name=constituency id=constituency {% if existing_candidate %}disabled{% endif %}><option value="">Select Constituency</option></select></div>
+<div id=wardBox><label>Ward</label><select name=ward id=ward {% if existing_candidate %}disabled{% endif %}><option value="">Select Ward</option></select></div>
+<div class="candidate-photo-field">
+<label>Passport Photo</label>
+<input type="file" id="photo_input" accept="image/jpeg,image/png,image/webp,image/*" {% if existing_candidate and not (pending_document_edit or correction_photo) %}disabled{% endif %} {% if not candidate or not candidate.photo or correction_photo %}required{% endif %}>
+<small class="muted">{% if pending_document_edit %}Optional: select, crop and confirm a replacement passport photo.{% elif correction_photo %}Open for correction: select and crop a fresh passport photo.{% elif existing_candidate %}Passport photo is locked for this application status.{% else %}Required. Select an image, crop it and click “Crop &amp; Use Photo” before saving.{% endif %} Background validation is disabled. The saved portrait must remain readable and show the candidate's face.</small>
+<input type="hidden" name="cropped_photo" id="cropped_photo">
+
+<div id="cropper_wrap" class="cropper-wrap" hidden>
+  <h3>Crop Passport Photo</h3>
+  <p class="muted">Drag the picture inside the frame and use the zoom slider. Centre the candidate's face. The area inside the frame is exactly what will be saved.</p>
+  <div class="crop-stage">
+    <canvas id="crop_canvas" width="400" height="500"></canvas>
+  </div>
+  <div class="crop-controls">
+    <label for="crop_zoom">Zoom</label>
+    <input type="range" id="crop_zoom" min="1" max="4" step="0.01" value="1">
+    <button type="button" id="crop_reset_btn" class="secondary-btn">Reset</button>
+    <button type="button" id="crop_cancel_btn" class="photo-cancel-btn">Cancel Photo Change</button>
+    <button type="button" id="crop_confirm_btn">Crop & Use Photo</button>
+  </div>
+  <div id="crop_status" class="lookup-status">Waiting for photo.</div>
+</div>
+
+<div id="cropped_preview_wrap" class="cropped-preview-wrap" hidden>
+  <b>Cropped photo to be saved:</b>
+  <img id="cropped_preview" class="cropped-preview" alt="Cropped passport photo preview">
+  <div class="lookup-status lookup-success">✓ Crop confirmed. Complete submission using the button below.</div>
+  {% if not list_locked and (not existing_candidate or candidate.approval_status=='not_submitted' or pending_document_edit or correction_photo) %}
+  <button type="submit" id="photo_submit_btn" class="photo-final-submit">{% if pending_document_edit %}Save Passport Photo Change{% elif correction_photo %}Submit Corrected Passport Photo{% else %}Validate Photo &amp; Submit Application{% endif %}</button>
+  {% endif %}
+</div>
+
+{% if candidate and candidate.photo %}
+<div class="existing-photo-wrap">
+  <span class="muted">Current saved photo:</span>
+  <img class="preview" src="/candidate-photo/{{candidate.id}}">
+</div>
+{% endif %}
+</div>
+<label>Short Biography</label><textarea name=bio rows=7 placeholder="Candidate biography, experience, priorities, etc." {% if existing_candidate %}disabled{% endif %}>{{candidate.bio if candidate else ''}}</textarea>
+{% if not list_locked %}<div class="form-actions">
+  {% if not existing_candidate %}<button type="submit">Validate Passport Photo &amp; Submit Application</button>{% elif candidate.approval_status=='not_submitted' %}<button type="submit">Validate Passport Photo &amp; Submit Application</button>{% elif pending_document_edit %}<button type="submit">Save Passport Photo Change</button>{% elif correction_photo %}<button type="submit">Submit Corrected Passport Photo</button>{% else %}<span class="view-only-message">No fields are open for editing.</span>{% endif %}
+  <a class="btn cancel-edit-btn" href="{{ url_for('candidate_home') if self_service else url_for('dashboard') }}">Cancel Edit</a>
+</div>{% endif %}
+</fieldset></form></div></div>
+
+<script>
+let H=null;
+const county=document.getElementById('county'), constituency=document.getElementById('constituency'), ward=document.getElementById('ward'), position=document.getElementById('position');
+const selfService={{'true' if self_service else 'false'}};
+const eligible={county:{{(verified_member.county if verified_member else '')|tojson}},constituency:{{(verified_member.constituency if verified_member else '')|tojson}},ward:{{(verified_member.ward if verified_member else '')|tojson}}};
+const current={county:{{((verified_member.county if verified_member else '') if self_service else (candidate.county if candidate else ''))|tojson}},constituency:{{((verified_member.constituency if verified_member else '') if self_service else (candidate.constituency if candidate else ''))|tojson}},ward:{{((verified_member.ward if verified_member else '') if self_service else (candidate.ward if candidate else ''))|tojson}}};
+const norm=v=>(v||'').trim().toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
+function fill(el,rows,placeholder,selected){
+ el.innerHTML='<option value="">'+placeholder+'</option>';
+ rows.forEach(r=>{const o=document.createElement('option');o.value=r.name;o.textContent=r.label||r.name;if(norm(r.name)==norm(selected))o.selected=true;el.appendChild(o);});
+}
+function applyScope(){
+ const o=position.selectedOptions[0], scope=o?o.dataset.scope:'';
+ document.getElementById('countyBox').style.display=scope==='national'?'none':'block';
+ document.getElementById('constBox').style.display=['constituency','ward'].includes(scope)?'block':'none';
+ document.getElementById('wardBox').style.display=scope==='ward'?'block':'none';
+}
+position.onchange=applyScope;
+county.onchange=()=>{
+ fill(constituency,H.constituencies.filter(x=>norm(x.county_key)==norm(county.value)),'Select Constituency','');
+ fill(ward,[],'Select Ward','');
+};
+constituency.onchange=()=>{
+ fill(ward,H.wards.filter(x=>norm(x.constituency_key)==norm(constituency.value)),'Select Ward','');
+};
+fetch('/api/hierarchy').then(r=>r.json()).then(d=>{
+ H=d;
+ const counties=selfService?H.counties.filter(x=>norm(x.name)==norm(eligible.county)):H.counties;
+ fill(county,counties,'Select County',current.county);
+ if(current.county){
+   let rows=H.constituencies.filter(x=>norm(x.county_key)==norm(current.county));
+   if(selfService)rows=rows.filter(x=>norm(x.name)==norm(eligible.constituency));
+   fill(constituency,rows,'Select Constituency',current.constituency);
+ }
+ if(current.constituency){
+   let rows=H.wards.filter(x=>norm(x.constituency_key)==norm(current.constituency));
+   if(selfService)rows=rows.filter(x=>norm(x.name)==norm(eligible.ward));
+   fill(ward,rows,'Select Ward',current.ward);
+ }
+ applyScope();
+});
+
+let memberVerified={{ 'true' if candidate or self_service else 'false' }};
+const nationalId=document.getElementById('national_id');
+const lookupBtn=document.getElementById('lookup_member_btn');
+const lookupStatus=document.getElementById('member_lookup_status');
+const fullName=document.getElementById('full_name');
+const phoneField=document.getElementById('phone');
+const emailField=document.getElementById('email');
+const membershipField=document.getElementById('membership_no');
+const candidateForm=document.getElementById('candidateForm');
+
+function clearMemberFields(){
+  fullName.value='';
+  phoneField.value='';
+  emailField.value='';
+  membershipField.value='';
+  memberVerified=false;
+}
+
+async function lookupMember(){
+  const id=(nationalId.value||'').trim();
+  clearMemberFields();
+  if(!id){
+    lookupStatus.className='lookup-status lookup-error';
+    lookupStatus.textContent='Enter a National ID number first.';
+    return;
+  }
+  if(!/^\d+$/.test(id)){
+    lookupStatus.className='lookup-status lookup-error';
+    lookupStatus.textContent='National ID must contain numbers only.';
+    return;
+  }
+
+  lookupBtn.disabled=true;
+  lookupStatus.className='lookup-status lookup-working';
+  lookupStatus.textContent='Checking Kobo and the membership fallback register…';
+
+  try{
+    const response=await fetch('/api/member-lookup?national_id='+encodeURIComponent(id), {cache:'no-store'});
+    const data=await response.json();
+    if(!response.ok || !data.ok){
+      lookupStatus.className='lookup-status lookup-error';
+      lookupStatus.textContent=data.error || 'Member could not be verified.';
+      if(data.already_registered){
+        fullName.value='';
+        phoneField.value='';
+        emailField.value='';
+        membershipField.value='';
+        memberVerified=false;
+      }
+      return;
+    }
+
+    const m=data.member||{};
+    fullName.value=m.full_name||'';
+    phoneField.value=m.phone||'';
+    emailField.value=m.email||'';
+    membershipField.value=m.membership_no||'';
+    memberVerified=true;
+    lookupStatus.className='lookup-status lookup-success';
+    lookupStatus.textContent='✓ Registered member found. Candidate registration may continue.';
+  }catch(e){
+    lookupStatus.className='lookup-status lookup-error';
+    lookupStatus.textContent='Unable to contact the membership lookup service. Please try again.';
+  }finally{
+    lookupBtn.disabled=false;
+  }
+}
+
+if(lookupBtn)lookupBtn.addEventListener('click',lookupMember);
+if(!nationalId.readOnly)nationalId.addEventListener('change',lookupMember);
+if(!nationalId.readOnly)nationalId.addEventListener('input',()=>{
+  if(memberVerified){
+    clearMemberFields();
+    lookupStatus.className='lookup-status';
+    lookupStatus.textContent='National ID changed. Verify membership again.';
+  }
+});
+candidateForm.addEventListener('submit',e=>{
+  if(!memberVerified){
+    e.preventDefault();
+    lookupStatus.className='lookup-status lookup-error';
+    lookupStatus.textContent='Verify this National ID against Kobo Membership Registration before saving.';
+    lookupStatus.scrollIntoView({behavior:'smooth',block:'center'});
+  }
+});
+
+
+
+</script>
+<script src="/static/photo_cropper.js?v=38"></script>

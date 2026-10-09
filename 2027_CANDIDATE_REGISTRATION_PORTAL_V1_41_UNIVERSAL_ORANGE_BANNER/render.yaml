@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: candidate-registration-portal
+    env: python
+    buildCommand: pip install -r requirements.txt && python verify_runtime.py
+    startCommand: gunicorn app:app
+    envVars:
+      - key: MASTER_REGISTER_DATABASE_URL
+        sync: false
+      - key: MASTER_REGISTER_STRICT
+        value: "true"
+      - key: MEMBERSHIP_ASSET_UID
+        sync: false
+      - key: KOBO_API_TOKEN
+        sync: false
+      - key: MEMBERSHIP_CSV_FILENAME
+        value: membership_registration.csv
+      - key: SYSTEM_RESET_TOKEN
+        sync: false
+      - key: PYTHON_VERSION
+        value: 3.12.14
