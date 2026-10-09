@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width,initial-scale=1">
+ <title>ODM 2027 Nominations Main Dashboard</title>
+ <link rel="stylesheet" href="{{ url_for('static',filename='style.css') }}">
+ <style>
+  .nav-shell{max-width:1180px;margin:28px auto;padding:0 18px 38px}
+  .nav-hero{background:#fff;border:1px solid #ddd;border-radius:16px;padding:24px;box-shadow:0 5px 24px #0001;text-align:center}
+  .nav-hero .candidate-portal-banner{max-height:126px;margin-bottom:16px}
+  .nav-hero h1{margin:4px 0 8px;font-size:30px}.nav-hero p{margin:0;color:#56606a;font-size:16px}
+  .nav-group{margin-top:28px}.nav-group h2{margin:0 0 13px;padding-left:13px;border-left:6px solid #ef7d00}
+  .nav-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+  .nav-tile{display:flex;flex-direction:column;min-height:190px;padding:20px;background:#fff;border:1px solid #d8dce0;border-radius:14px;box-shadow:0 4px 16px #0000000d;text-decoration:none;color:#111;transition:transform .15s,box-shadow .15s,border-color .15s}
+  .nav-tile:hover,.nav-tile:focus{transform:translateY(-2px);box-shadow:0 8px 24px #0002;border-color:#ef7d00;outline:none}
+  .nav-icon{display:inline-grid;place-items:center;align-self:flex-start;min-width:48px;height:42px;padding:0 9px;border-radius:9px;background:#111;color:#fff;border:3px solid #ef7d00;font-weight:900;font-size:13px}
+  .nav-tile h3{margin:14px 0 8px;font-size:19px}.nav-tile p{margin:0 0 18px;color:#59636e;line-height:1.4;flex:1}
+  .nav-open{font-weight:850;color:#8a3d00}.nav-note{margin:26px 0 0;text-align:center;color:#68727c;font-size:13px}
+  @media(max-width:900px){.nav-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:600px){.nav-shell{margin:14px auto;padding:0 10px 28px}.nav-hero{padding:18px 14px}.nav-hero h1{font-size:24px}.nav-grid{grid-template-columns:1fr}.nav-tile{min-height:0}}
+ </style>
+</head>
+<body>
+<main class="nav-shell">
+ <header class="nav-hero">
+  <img class="candidate-portal-banner" src="{{ url_for('static',filename='odm_orange_voting_banner.png') }}?v=1.44" alt="ODM 2027 Party Primaries Voting System">
+  <h1>Main Navigation Dashboard</h1>
+  <p>Choose the service you want to open.</p>
+ </header>
+ {% for group_name,items in groups %}
+ <section class="nav-group">
+  <h2>{{ group_name }}</h2>
+  <div class="nav-grid">
+   {% for item in items %}
+   <a class="nav-tile" href="{{ item.url }}">
+    <span class="nav-icon">{{ item.icon }}</span>
+    <h3>{{ item.title }}</h3>
+    <p>{{ item.description }}</p>
+    <span class="nav-open">Open service →</span>
+   </a>
+   {% endfor %}
+  </div>
+ </section>
+ {% endfor %}
+ <p class="nav-note">Each terminal and protected dashboard still requires its assigned login credentials.</p>
+</main>
+</body>
+</html>

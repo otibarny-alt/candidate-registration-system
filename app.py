@@ -41,6 +41,22 @@ LEVEL2_ADMIN_USERNAME=os.getenv("LEVEL2_ADMIN_USERNAME","").strip()
 LEVEL2_ADMIN_PASSWORD_HASH=os.getenv("LEVEL2_ADMIN_PASSWORD_HASH","").strip()
 _CANDIDATE_LOGIN_ATTEMPTS={}
 
+# Central navigation destinations. Every external address may be changed in
+# Render without editing the application again.
+VOTING_SYSTEM_BASE_URL=os.getenv("VOTING_SYSTEM_BASE_URL","https://voting-simulation-system.onrender.com").strip().rstrip("/")
+VERIFICATION_SYSTEM_BASE_URL=os.getenv("VERIFICATION_SYSTEM_BASE_URL","https://odm-member-photo-verifier.onrender.com").strip().rstrip("/")
+RESULT_DASHBOARD_URLS={
+    "presidential":os.getenv("PRESIDENTIAL_RESULTS_URL","https://presidential-simulation-results-dashboard.onrender.com").strip(),
+    "gubernatorial":os.getenv("GUBERNATORIAL_RESULTS_URL","https://gubernatorial-simulation-results-dashboard.onrender.com").strip(),
+    "senatorial":os.getenv("SENATORIAL_RESULTS_URL","https://senatorial-simulation-results-dashboard.onrender.com").strip(),
+    "women_representative":os.getenv("WOMEN_REP_RESULTS_URL","https://women-representative-simulation-results-dashboard.onrender.com").strip(),
+    "mna":os.getenv("MNA_RESULTS_URL","https://mna-simulation-results-dashboard.onrender.com").strip(),
+    "mca":os.getenv("MCA_RESULTS_URL","https://mca-simulation-results-dashboard.onrender.com").strip(),
+}
+
+def service_url(base,path=""):
+    return f"{str(base or '').rstrip('/')}/{str(path or '').lstrip('/')}".rstrip("/")
+
 KOBO_BASE_URL=os.getenv("KOBO_BASE_URL","https://kf.kobotoolbox.org").rstrip("/")
 MEMBERSHIP_ASSET_UID=os.getenv("MEMBERSHIP_ASSET_UID","").strip()
 KOBO_API_TOKEN=os.getenv("KOBO_API_TOKEN","").strip()
@@ -718,6 +734,28 @@ def render_candidate_form_page(candidate=None, **context):
         list_locked=candidate_list_is_final(),
         **context
     )
+
+@app.get("/main-dashboard")
+@app.get("/navigation")
+def main_navigation_dashboard():
+    services=[
+        {"group":"Registration & Lookup","title":"Membership Registration","description":"Register a new member or open an existing membership record.","url":service_url(VOTING_SYSTEM_BASE_URL,"membership"),"icon":"MEM"},
+        {"group":"Registration & Lookup","title":"Candidate Registration","description":"Start a candidate application or access an existing application.","url":url_for("candidate_register"),"icon":"CAN"},
+        {"group":"Registration & Lookup","title":"ID to Serial Number Lookup","description":"Sign in to the polling-station lookup terminal and retrieve a voter serial number.","url":service_url(VOTING_SYSTEM_BASE_URL,"id-serial-lookup"),"icon":"ID"},
+        {"group":"Registration & Lookup","title":"Membership / Polling Centre Lookup","description":"Use a National ID to find the voter's registered name and polling centre.","url":service_url(VOTING_SYSTEM_BASE_URL,"voter-polling-center-lookup"),"icon":"LOC"},
+        {"group":"Polling Terminals","title":"Entrance Verification Terminal","description":"Log in to verify voters before they proceed to vote.","url":service_url(VERIFICATION_SYSTEM_BASE_URL,"login"),"icon":"VER"},
+        {"group":"Polling Terminals","title":"Voting Terminal","description":"Log in to the station voting terminal after entrance verification is active.","url":service_url(VOTING_SYSTEM_BASE_URL,"terminal-login"),"icon":"VOTE"},
+        {"group":"Results Dashboards","title":"Presidential Results","description":"Open the Presidential nomination results dashboard.","url":RESULT_DASHBOARD_URLS["presidential"],"icon":"P"},
+        {"group":"Results Dashboards","title":"Gubernatorial Results","description":"Open the Gubernatorial nomination results dashboard.","url":RESULT_DASHBOARD_URLS["gubernatorial"],"icon":"G"},
+        {"group":"Results Dashboards","title":"Senatorial Results","description":"Open the Senatorial nomination results dashboard.","url":RESULT_DASHBOARD_URLS["senatorial"],"icon":"S"},
+        {"group":"Results Dashboards","title":"Women Representative Results","description":"Open the Women Representative nomination results dashboard.","url":RESULT_DASHBOARD_URLS["women_representative"],"icon":"WR"},
+        {"group":"Results Dashboards","title":"MNA Results","description":"Open the Member of National Assembly results dashboard.","url":RESULT_DASHBOARD_URLS["mna"],"icon":"MNA"},
+        {"group":"Results Dashboards","title":"MCA Results","description":"Open the Member of County Assembly results dashboard.","url":RESULT_DASHBOARD_URLS["mca"],"icon":"MCA"},
+    ]
+    groups=[]
+    for name in ("Registration & Lookup","Polling Terminals","Results Dashboards"):
+        groups.append((name,[item for item in services if item["group"]==name]))
+    return render_template("main_dashboard.html",groups=groups)
 
 @app.get("/login")
 def login():
