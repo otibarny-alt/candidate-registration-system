@@ -50,6 +50,16 @@ def normalized_results_url(value):
     """Repair the obsolete -results-dashboard host and open the login page."""
     url=str(value or "").strip().rstrip("/")
     url=url.replace("-simulation-results-dashboard.onrender.com","-simulation-results.onrender.com")
+    legacy_hosts={
+        "https://senatorial-simulation-results.onrender.com":"https://senatorial-results-dashboard.onrender.com",
+        "https://women-representative-simulation-results.onrender.com":"https://women-rep-results-dashboard.onrender.com",
+        "https://mna-simulation-results.onrender.com":"https://member-of-na-results-dashboard.onrender.com",
+        "https://mca-simulation-results.onrender.com":"https://member-of-ca-results-dashboard.onrender.com",
+    }
+    for old_host,new_host in legacy_hosts.items():
+        if url.lower().startswith(old_host):
+            url=new_host+url[len(old_host):]
+            break
     if url and not url.lower().endswith("/login"):
         url=f"{url}/login"
     return url
@@ -57,10 +67,10 @@ def normalized_results_url(value):
 RESULT_DASHBOARD_URLS={
     "presidential":normalized_results_url(os.getenv("PRESIDENTIAL_RESULTS_URL","https://presidential-simulation-results.onrender.com/login")),
     "gubernatorial":normalized_results_url(os.getenv("GUBERNATORIAL_RESULTS_URL","https://gubernatorial-simulation-results.onrender.com/login")),
-    "senatorial":normalized_results_url(os.getenv("SENATORIAL_RESULTS_URL","https://senatorial-simulation-results.onrender.com/login")),
-    "women_representative":normalized_results_url(os.getenv("WOMEN_REP_RESULTS_URL","https://women-representative-simulation-results.onrender.com/login")),
-    "mna":normalized_results_url(os.getenv("MNA_RESULTS_URL","https://mna-simulation-results.onrender.com/login")),
-    "mca":normalized_results_url(os.getenv("MCA_RESULTS_URL","https://mca-simulation-results.onrender.com/login")),
+    "senatorial":normalized_results_url(os.getenv("SENATORIAL_RESULTS_URL","https://senatorial-results-dashboard.onrender.com/login")),
+    "women_representative":normalized_results_url(os.getenv("WOMEN_REP_RESULTS_URL","https://women-rep-results-dashboard.onrender.com/login")),
+    "mna":normalized_results_url(os.getenv("MNA_RESULTS_URL","https://member-of-na-results-dashboard.onrender.com/login")),
+    "mca":normalized_results_url(os.getenv("MCA_RESULTS_URL","https://member-of-ca-results-dashboard.onrender.com/login")),
 }
 
 def service_url(base,path=""):

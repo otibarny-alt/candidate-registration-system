@@ -28,10 +28,10 @@ services:
       - key: GUBERNATORIAL_RESULTS_URL
         value: https://gubernatorial-simulation-results.onrender.com/login
       - key: SENATORIAL_RESULTS_URL
-        value: https://senatorial-simulation-results.onrender.com/login
+        value: https://senatorial-results-dashboard.onrender.com/login
       - key: WOMEN_REP_RESULTS_URL
-        value: https://women-representative-simulation-results.onrender.com/login
+        value: https://women-rep-results-dashboard.onrender.com/login
       - key: MNA_RESULTS_URL
-        value: https://mna-simulation-results.onrender.com/login
+        value: https://member-of-na-results-dashboard.onrender.com/login
       - key: MCA_RESULTS_URL
-        value: https://mca-simulation-results.onrender.com/login
+        value: https://member-of-ca-results-dashboard.onrender.com/login
