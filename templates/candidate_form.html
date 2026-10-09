@@ -3,6 +3,7 @@
 {% set pending_document_edit = existing_candidate and (candidate.approval_status or 'not_submitted') in ['pending','not_submitted'] %}
 {% set correction_photo = existing_candidate and candidate.approval_status=='rejected' and candidate.rejection_reason=='improper_candidate_picture' %}
 <div class=top><b>Candidate Registration & Profile Portal</b>{% if self_service %}<a href=/candidate/logout>Candidate Logout</a>{% endif %}</div>
+<div class="portal-banner-strip"><img class="candidate-portal-banner" src="{{ url_for('static', filename='odm_orange_voting_banner.png') }}?v=1.42" alt="ODM 2027 Party Primaries Voting System"></div>
 <div class=wrap><div class=card><div class="candidate-form-heading"><h2>{{"Edit Candidate" if candidate else "Register Candidate"}}</h2>{% if not candidate %}<a class="btn status-login-link" href="{{url_for('candidate_access')}}">Already registered? View Status / Edit Application</a>{% endif %}</div>
 {% if self_service %}<div class="privacy-notice"><b>Private application:</b> You are viewing only your own candidate information.</div>{% endif %}
 {% if list_locked %}<div class="central-lock central-lock-final"><h3>🔒 FINAL CANDIDATE LIST — EDITING LOCKED</h3><p>This application is available for viewing only. No changes can be saved unless a Level 2 administrator unlocks the candidate list.</p></div>{% endif %}

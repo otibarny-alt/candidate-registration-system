@@ -1,6 +1,7 @@
 <!doctype html><link rel=stylesheet href=/static/style.css><meta name=viewport content="width=device-width,initial-scale=1">
 <div class=top><b>Candidate Registration & Profile Portal</b><a href="{{url_for('candidate_register')}}">New Candidate Registration</a></div>
 <div class=demo>PRIVATE CANDIDATE ACCESS</div>
+<div class="portal-banner-strip"><img class="candidate-portal-banner" src="{{ url_for('static', filename='odm_orange_voting_banner.png') }}?v=1.42" alt="ODM 2027 Party Primaries Voting System"></div>
 <div class=wrap><div class="card narrow"><h2>Check Application Status or Open Your Application</h2>
 <p>Registered candidates can enter their National ID and registered phone number to view whether an existing application is Pending, Accepted or Rejected.</p>
 {% if message %}<div class=success>{{message}}</div>{% endif %}

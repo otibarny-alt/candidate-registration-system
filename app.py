@@ -13,11 +13,9 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect, text, func
 from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.security import check_password_hash
-from party_branding_client import register_party_branding
 
 app=Flask(__name__)
 app.secret_key=os.getenv("FLASK_SECRET_KEY","candidate-portal-change-me")
-register_party_branding(app)
 
 db_url=(os.getenv("CANDIDATE_DATABASE_URL","").strip()
         or os.getenv("MASTER_REGISTER_DATABASE_URL","").strip()

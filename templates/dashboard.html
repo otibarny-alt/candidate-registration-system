@@ -1,6 +1,7 @@
 <!doctype html><link rel=stylesheet href=/static/style.css><meta name=viewport content="width=device-width,initial-scale=1">
 <div class=top><b>Candidate Registration & Profile Portal</b><a href=/logout>Logout</a></div>
 <div class=demo>TRAINING / SIMULATION SUPPORT PORTAL</div>
+<div class="portal-banner-strip"><img class="candidate-portal-banner" src="{{ url_for('static', filename='odm_orange_voting_banner.png') }}?v=1.42" alt="ODM 2027 Party Primaries Voting System"></div>
 <div class=wrap><div class=card><div class=headrow><div><h2>Registered Candidates</h2><p class="muted admin-role-note">Administrators review applications and record an Accept or Reject decision. Candidates are responsible for their own details and document uploads.</p></div></div>
 {% if message %}<div class=success>{{message}}</div>{% endif %}
 {% if error %}<div class=error>{{error}}</div>{% endif %}
