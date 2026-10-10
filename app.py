@@ -45,6 +45,9 @@ _CANDIDATE_LOGIN_ATTEMPTS={}
 # Render without editing the application again.
 VOTING_SYSTEM_BASE_URL=os.getenv("VOTING_SYSTEM_BASE_URL","https://voting-simulation-system.onrender.com").strip().rstrip("/")
 VERIFICATION_SYSTEM_BASE_URL=os.getenv("VERIFICATION_SYSTEM_BASE_URL","https://odm-member-photo-verifier.onrender.com").strip().rstrip("/")
+OFFICIAL_ODM_MEMBERSHIP_URL=os.getenv(
+    "OFFICIAL_ODM_MEMBERSHIP_URL","https://www.odmmembership.com/web/"
+).strip()
 
 def normalized_results_url(value):
     """Repair the obsolete -results-dashboard host and open the login page."""
@@ -759,6 +762,7 @@ def render_candidate_form_page(candidate=None, **context):
 def main_navigation_dashboard():
     services=[
         {"group":"Registration & Lookup","title":"Membership Registration","description":"Register a new member or open an existing membership record.","url":service_url(VOTING_SYSTEM_BASE_URL,"membership"),"icon":"MEM"},
+        {"group":"Registration & Lookup","title":"Official ODM Membership Registration","description":"Open the official ODM membership website to register through ODM Membership.","url":OFFICIAL_ODM_MEMBERSHIP_URL,"icon":"ODM","external":True},
         {"group":"Registration & Lookup","title":"Candidate Registration","description":"Start a candidate application or access an existing application.","url":url_for("candidate_register"),"icon":"CAN"},
         {"group":"Polling Terminals","title":"ID to Serial Number Lookup","description":"Sign in to the polling-station lookup terminal and retrieve a voter serial number.","url":service_url(VOTING_SYSTEM_BASE_URL,"id-serial-lookup"),"icon":"ID"},
         {"group":"Registration & Lookup","title":"Membership / Polling Centre Lookup","description":"Use a National ID to find the voter's registered name and polling centre.","url":service_url(VOTING_SYSTEM_BASE_URL,"voter-polling-center-lookup"),"icon":"LOC"},

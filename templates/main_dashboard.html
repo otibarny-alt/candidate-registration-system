@@ -18,7 +18,7 @@
  <details class="nav-group" {% if loop.first %}open{% endif %}>
   <summary><span>{{ group_name }}</span><small>{{ items|length }} services</small></summary>
   <div class="nav-grid">
-   {% for item in items %}<a class="nav-tile" href="{{ item.url }}"><span class="nav-icon">{{ item.icon }}</span><h3>{{ item.title }}</h3><p>{{ item.description }}</p><span class="nav-open">Open →</span></a>{% endfor %}
+   {% for item in items %}<a class="nav-tile" href="{{ item.url }}"{% if item.external %} target="_blank" rel="noopener noreferrer"{% endif %}><span class="nav-icon">{{ item.icon }}</span><h3>{{ item.title }}</h3><p>{{ item.description }}</p><span class="nav-open">{% if item.external %}Open official site ↗{% else %}Open →{% endif %}</span></a>{% endfor %}
   </div>
  </details>
  {% endfor %}
