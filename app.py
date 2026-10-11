@@ -768,7 +768,6 @@ def main_navigation_dashboard():
         {"group":"Registration & Lookup","title":"Membership / Polling Centre Lookup","description":"Use a National ID to find the voter's registered name and polling centre.","url":service_url(VOTING_SYSTEM_BASE_URL,"voter-polling-center-lookup"),"icon":"LOC"},
         {"group":"Polling Terminals","title":"Entrance Verification Terminal","description":"Log in to verify voters before they proceed to vote.","url":service_url(VERIFICATION_SYSTEM_BASE_URL,"login"),"icon":"VER"},
         {"group":"Polling Terminals","title":"Voting Terminal","description":"Log in to the station voting terminal after entrance verification is active.","url":service_url(VOTING_SYSTEM_BASE_URL,"terminal-login"),"icon":"VOTE"},
-        {"group":"Results Dashboards","title":"Presidential Results","description":"Open the Presidential nomination results dashboard.","url":RESULT_DASHBOARD_URLS["presidential"],"icon":"P"},
         {"group":"Results Dashboards","title":"Gubernatorial Results","description":"Open the Gubernatorial nomination results dashboard.","url":RESULT_DASHBOARD_URLS["gubernatorial"],"icon":"G"},
         {"group":"Results Dashboards","title":"Senatorial Results","description":"Open the Senatorial nomination results dashboard.","url":RESULT_DASHBOARD_URLS["senatorial"],"icon":"S"},
         {"group":"Results Dashboards","title":"Women Representative Results","description":"Open the Women Representative nomination results dashboard.","url":RESULT_DASHBOARD_URLS["women_representative"],"icon":"WR"},
