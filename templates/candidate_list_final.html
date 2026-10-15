@@ -1,5 +1,5 @@
 <!doctype html><link rel=stylesheet href=/static/style.css><meta name=viewport content="width=device-width,initial-scale=1">
-<div class=wrap><div class="card narrow"><img class="candidate-portal-banner" src="{{ url_for('static', filename='odm_orange_voting_banner.png') }}?v=1.43" alt="ODM 2027 Party Primaries Voting System"><nav class="portal-card-nav"><a href=/candidate/logout>Candidate Logout</a></nav><div class="central-lock central-lock-final">
+<div class=wrap><div class="card narrow"><img class="candidate-portal-banner" src="{{ party_brand.header_url or url_for('static', filename='odm_orange_voting_banner.png') }}" alt="{{ party_brand.abbreviation }} 2027 Party Primaries Voting System"><nav class="portal-card-nav"><a href=/candidate/logout>Candidate Logout</a></nav><div class="central-lock central-lock-final">
 <h2>🔒 Candidate List Is Final</h2>
 <p>New candidate applications and all application changes are closed. Only a Level 2 administrator can unlock the list.</p>
 </div></div></div>
