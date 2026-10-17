@@ -145,6 +145,7 @@ GOVERNOR_PDF_DOCUMENT=("academic_certificate","Copy of Highest Academic Certific
 PLWD_PDF_DOCUMENT=("plwd_identification_card","PLWD Identification Card")
 PUBLIC_OFFICER_PDF_DOCUMENT=("acknowledged_resignation_letter","Acknowledged Resignation Letter")
 BANKRUPTCY_PDF_DOCUMENT=("bankruptcy_discharge_evidence","Evidence of Discharge")
+APPEAL_REVIEW_PDF_DOCUMENT=("appeal_or_review_evidence","Evidence of the Appeal or Review")
 
 class Candidate(db.Model):
     id=db.Column(db.Integer,primary_key=True)
@@ -157,6 +158,7 @@ class Candidate(db.Model):
     living_with_disability=db.Column(db.Boolean,default=False,nullable=False)
     public_officer_recently_resigned=db.Column(db.Boolean,default=False,nullable=False)
     ever_declared_bankrupt=db.Column(db.Boolean,default=False,nullable=False)
+    sentence_decision_appealed=db.Column(db.Boolean,default=False,nullable=False)
     position=db.Column(db.String(40),nullable=False,index=True)
     county=db.Column(db.String(160),index=True)
     constituency=db.Column(db.String(160),index=True)
@@ -178,6 +180,7 @@ class Candidate(db.Model):
     plwd_identification_card=db.Column(db.LargeBinary)
     acknowledged_resignation_letter=db.Column(db.LargeBinary)
     bankruptcy_discharge_evidence=db.Column(db.LargeBinary)
+    appeal_or_review_evidence=db.Column(db.LargeBinary)
     status=db.Column(db.String(20),default="active",nullable=False,index=True)
     approval_status=db.Column(db.String(20),default="not_submitted",nullable=False,index=True)
     rejection_reason=db.Column(db.String(80))
@@ -211,7 +214,9 @@ with app.app_context():
         db.session.execute(text("ALTER TABLE candidate ADD COLUMN public_officer_recently_resigned BOOLEAN NOT NULL DEFAULT FALSE"))
     if "ever_declared_bankrupt" not in candidate_columns:
         db.session.execute(text("ALTER TABLE candidate ADD COLUMN ever_declared_bankrupt BOOLEAN NOT NULL DEFAULT FALSE"))
-    for document_column,_document_label in (*PDF_DOCUMENTS,GOVERNOR_PDF_DOCUMENT,PLWD_PDF_DOCUMENT,PUBLIC_OFFICER_PDF_DOCUMENT,BANKRUPTCY_PDF_DOCUMENT):
+    if "sentence_decision_appealed" not in candidate_columns:
+        db.session.execute(text("ALTER TABLE candidate ADD COLUMN sentence_decision_appealed BOOLEAN NOT NULL DEFAULT FALSE"))
+    for document_column,_document_label in (*PDF_DOCUMENTS,GOVERNOR_PDF_DOCUMENT,PLWD_PDF_DOCUMENT,PUBLIC_OFFICER_PDF_DOCUMENT,BANKRUPTCY_PDF_DOCUMENT,APPEAL_REVIEW_PDF_DOCUMENT):
         if document_column not in candidate_columns:
             db.session.execute(text(f"ALTER TABLE candidate ADD COLUMN {document_column} BYTEA"))
     if db.session.get(PortalState,1) is None:
@@ -383,6 +388,8 @@ def candidate_required_documents(c):
         documents.append(PUBLIC_OFFICER_PDF_DOCUMENT)
     if c and c.ever_declared_bankrupt:
         documents.append(BANKRUPTCY_PDF_DOCUMENT)
+    if c and c.sentence_decision_appealed:
+        documents.append(APPEAL_REVIEW_PDF_DOCUMENT)
     return documents
 
 def candidate_missing_documents(c):
@@ -411,7 +418,7 @@ def candidate_rejection_labels(c):
 
 def save_candidate_pdf_uploads(c):
     changed=set()
-    for field,label in (*PDF_DOCUMENTS,GOVERNOR_PDF_DOCUMENT,PLWD_PDF_DOCUMENT,PUBLIC_OFFICER_PDF_DOCUMENT,BANKRUPTCY_PDF_DOCUMENT):
+    for field,label in (*PDF_DOCUMENTS,GOVERNOR_PDF_DOCUMENT,PLWD_PDF_DOCUMENT,PUBLIC_OFFICER_PDF_DOCUMENT,BANKRUPTCY_PDF_DOCUMENT,APPEAL_REVIEW_PDF_DOCUMENT):
         upload=request.files.get(field)
         if upload and str(upload.filename or "").strip():
             max_pages=2 if field=="summarized_cv" else None
@@ -827,6 +834,7 @@ def candidate_dict(c):
       "living_with_disability":bool(c.living_with_disability),
       "public_officer_recently_resigned":bool(c.public_officer_recently_resigned),
       "ever_declared_bankrupt":bool(c.ever_declared_bankrupt),
+      "sentence_decision_appealed":bool(c.sentence_decision_appealed),
       "position":c.position,
       "county":c.county or "",
       "constituency":c.constituency or "",
@@ -877,6 +885,7 @@ def render_candidate_form_page(candidate=None, **context):
         plwd_pdf_document=PLWD_PDF_DOCUMENT,
         public_officer_pdf_document=PUBLIC_OFFICER_PDF_DOCUMENT,
         bankruptcy_pdf_document=BANKRUPTCY_PDF_DOCUMENT,
+        appeal_review_pdf_document=APPEAL_REVIEW_PDF_DOCUMENT,
         rejection_document_keys=candidate_rejection_keys(candidate) if candidate else [],
         rejection_document_labels=candidate_rejection_labels(candidate) if candidate else [],
         **context
@@ -1027,6 +1036,7 @@ def dashboard():
         plwd_pdf_document=PLWD_PDF_DOCUMENT,
         public_officer_pdf_document=PUBLIC_OFFICER_PDF_DOCUMENT,
         bankruptcy_pdf_document=BANKRUPTCY_PDF_DOCUMENT,
+        appeal_review_pdf_document=APPEAL_REVIEW_PDF_DOCUMENT,
         candidate_rejection_keys=candidate_rejection_keys,
         candidate_rejection_labels=candidate_rejection_labels,
         csrf_token=admin_csrf_token(),level2_configured=bool(LEVEL2_ADMIN_USERNAME and LEVEL2_ADMIN_PASSWORD_HASH),
@@ -1383,6 +1393,12 @@ def save_candidate(c):
     if bankruptcy_answer not in {"yes","no"}:
         return render_candidate_form_page(c,error="Select YES or NO for Have you ever been declared bankrupt?")
     c.ever_declared_bankrupt=bankruptcy_answer=="yes"
+    appeal_answer=f.get("sentence_decision_appealed","").strip().lower()
+    if not appeal_answer and not is_new:
+        appeal_answer="yes" if c.sentence_decision_appealed else "no"
+    if appeal_answer not in {"yes","no"}:
+        return render_candidate_form_page(c,error="Select YES or NO for Are You subject of a Sentence and have appealed the Decision?")
+    c.sentence_decision_appealed=appeal_answer=="yes"
     c.position=position
     c.bio=f.get("bio","").strip()
     c.status=(f.get("status","active").strip() or "active") if logged_in() else "active"
@@ -1469,7 +1485,7 @@ def candidate_document(candidate_id,document_key):
     c=Candidate.query.get_or_404(candidate_id)
     if not candidate_can_access(c):
         abort(403)
-    allowed=dict((*PDF_DOCUMENTS,GOVERNOR_PDF_DOCUMENT,PLWD_PDF_DOCUMENT,PUBLIC_OFFICER_PDF_DOCUMENT,BANKRUPTCY_PDF_DOCUMENT))
+    allowed=dict((*PDF_DOCUMENTS,GOVERNOR_PDF_DOCUMENT,PLWD_PDF_DOCUMENT,PUBLIC_OFFICER_PDF_DOCUMENT,BANKRUPTCY_PDF_DOCUMENT,APPEAL_REVIEW_PDF_DOCUMENT))
     if document_key not in allowed:
         abort(404)
     data=getattr(c,document_key,None)

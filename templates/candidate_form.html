@@ -94,6 +94,25 @@
 </div>
 </div>
 
+<div class="appeal-question-field"><label for="sentence_decision_appealed">Are You subject of a Sentence and have appealed the Decision?</label>
+<select name="sentence_decision_appealed" id="sentence_decision_appealed" required {% if existing_candidate %}disabled{% endif %}>
+<option value="">Select YES or NO</option>
+<option value="yes" {% if candidate and candidate.sentence_decision_appealed %}selected{% endif %}>YES</option>
+<option value="no" {% if candidate and not candidate.sentence_decision_appealed %}selected{% endif %}>NO</option>
+</select>
+<div class="candidate-document-field" id="appealReviewEvidenceDocument">
+{% set appeal_field=appeal_review_pdf_document[0] %}
+<label for="{{appeal_field}}">{{appeal_review_pdf_document[1]}} (PDF)</label>
+<input type="file" id="{{appeal_field}}" name="{{appeal_field}}" accept="application/pdf,.pdf"
+  {% if existing_candidate and candidate.approval_status not in ['pending','not_submitted'] and appeal_field not in rejected_document_keys %}disabled{% endif %}
+  {% if candidate and candidate.sentence_decision_appealed and not candidate|attr(appeal_field) %}required{% endif %}>
+{% if candidate and candidate|attr(appeal_field) %}
+<a class="document-view-link" target="_blank" rel="noopener" href="{{url_for('candidate_document',candidate_id=candidate.id,document_key=appeal_field)}}">View saved PDF</a>
+{% endif %}
+<small class="muted">Required only when the answer is YES. Maximum file size: 5 MB.</small>
+</div>
+</div>
+
 <div><label>Position Applied For</label>
 <select name=position id=position required {% if existing_candidate %}disabled{% endif %}>
 <option value="">Select position</option>
@@ -190,6 +209,7 @@ const county=document.getElementById('county'), constituency=document.getElement
 const plwdAnswer=document.getElementById('living_with_disability'), plwdDocument=document.getElementById('plwdIdentificationDocument'), plwdInput=document.getElementById('plwd_identification_card');
 const publicOfficerAnswer=document.getElementById('public_officer_recently_resigned'), resignationDocument=document.getElementById('publicOfficerResignationDocument'), resignationInput=document.getElementById('acknowledged_resignation_letter');
 const bankruptcyAnswer=document.getElementById('ever_declared_bankrupt'), bankruptcyDocument=document.getElementById('bankruptcyDischargeDocument'), bankruptcyInput=document.getElementById('bankruptcy_discharge_evidence');
+const appealAnswer=document.getElementById('sentence_decision_appealed'), appealDocument=document.getElementById('appealReviewEvidenceDocument'), appealInput=document.getElementById('appeal_or_review_evidence');
 const selfService={{'true' if self_service else 'false'}};
 const eligible={county:{{(verified_member.county if verified_member else '')|tojson}},constituency:{{(verified_member.constituency if verified_member else '')|tojson}},ward:{{(verified_member.ward if verified_member else '')|tojson}}};
 const current={county:{{((verified_member.county if verified_member else '') if self_service else (candidate.county if candidate else ''))|tojson}},constituency:{{((verified_member.constituency if verified_member else '') if self_service else (candidate.constituency if candidate else ''))|tojson}},ward:{{((verified_member.ward if verified_member else '') if self_service else (candidate.ward if candidate else ''))|tojson}}};
@@ -217,11 +237,15 @@ function applyScope(){
  const wasBankrupt=bankruptcyAnswer.value==='yes';
  bankruptcyDocument.style.display=wasBankrupt?'block':'none';
  bankruptcyInput.required=wasBankrupt && !bankruptcyDocument.querySelector('.document-view-link');
+ const hasAppealed=appealAnswer.value==='yes';
+ appealDocument.style.display=hasAppealed?'block':'none';
+ appealInput.required=hasAppealed && !appealDocument.querySelector('.document-view-link');
 }
 position.onchange=applyScope;
 plwdAnswer.onchange=applyScope;
 publicOfficerAnswer.onchange=applyScope;
 bankruptcyAnswer.onchange=applyScope;
+appealAnswer.onchange=applyScope;
 county.onchange=()=>{
  fill(constituency,H.constituencies.filter(x=>norm(x.county_key)==norm(county.value)),'Select Constituency','');
  fill(ward,[],'Select Ward','');
