@@ -137,6 +137,7 @@ PDF_DOCUMENTS=[
  ("good_conduct_certificate","Certificate of Good Conduct"),
  ("life_membership_certificate","Life Membership Certificate Copy"),
  ("signed_code_of_conduct","Signed Code of Conduct"),
+ ("payment_receipts","Copy of Payment Receipts"),
 ]
 GOVERNOR_PDF_DOCUMENT=("academic_certificate","Copy of Highest Academic Certificate")
 
@@ -163,6 +164,7 @@ class Candidate(db.Model):
     good_conduct_certificate=db.Column(db.LargeBinary)
     life_membership_certificate=db.Column(db.LargeBinary)
     signed_code_of_conduct=db.Column(db.LargeBinary)
+    payment_receipts=db.Column(db.LargeBinary)
     academic_certificate=db.Column(db.LargeBinary)
     status=db.Column(db.String(20),default="active",nullable=False,index=True)
     approval_status=db.Column(db.String(20),default="not_submitted",nullable=False,index=True)
