@@ -241,6 +241,10 @@ function applyScope(){
  document.getElementById('countyBox').style.display=scope==='national'?'none':'block';
  document.getElementById('constBox').style.display=['constituency','ward'].includes(scope)?'block':'none';
  document.getElementById('wardBox').style.display=scope==='ward'?'block':'none';
+ county.required=!!scope && scope!=='national';
+ constituency.required=['constituency','ward'].includes(scope);
+ ward.required=scope==='ward';
+ [county,constituency,ward].forEach(select=>{if(!select.required)clearMandatorySelectionError(select);});
  const governorDocument=document.getElementById('governorAcademicDocument');
  const academicInput=document.getElementById('academic_certificate');
  const isGovernor=position.value==='governor';
@@ -377,6 +381,44 @@ candidateForm.addEventListener('submit',e=>{
     lookupStatus.textContent='Verify this National ID against Kobo Membership Registration before saving.';
     lookupStatus.scrollIntoView({behavior:'smooth',block:'center'});
   }
+});
+
+function selectionErrorFor(select){
+  const container=select.parentElement || select;
+  return container.querySelector('.mandatory-selection-error');
+}
+function showMandatorySelectionError(select){
+  let message=selectionErrorFor(select);
+  if(!message){
+    message=document.createElement('div');
+    message.className='mandatory-selection-error';
+    message.setAttribute('role','alert');
+    message.textContent='Please select an item in the list.';
+    select.insertAdjacentElement('afterend',message);
+  }
+  message.hidden=false;
+  select.classList.add('mandatory-selection-invalid');
+}
+function clearMandatorySelectionError(select){
+  const message=selectionErrorFor(select);
+  if(message)message.hidden=true;
+  select.classList.remove('mandatory-selection-invalid');
+}
+const mandatorySelects=[...document.querySelectorAll('#candidateForm select')];
+mandatorySelects.forEach(select=>{
+  select.addEventListener('invalid',event=>{
+    if(!select.required || select.disabled || select.value)return;
+    event.preventDefault();
+    showMandatorySelectionError(select);
+    const firstInvalid=mandatorySelects.find(item=>item.required && !item.disabled && !item.value);
+    if(firstInvalid===select)setTimeout(()=>{
+      select.focus({preventScroll:true});
+      select.scrollIntoView({behavior:'smooth',block:'center'});
+    },0);
+  });
+  select.addEventListener('change',()=>{
+    if(select.value)clearMandatorySelectionError(select);
+  });
 });
 
 function updateApplicationProgress(){
