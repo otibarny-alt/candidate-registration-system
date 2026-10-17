@@ -31,7 +31,7 @@ elif db_url.startswith("postgresql://"):
     db_url="postgresql+psycopg://"+db_url[len("postgresql://"):]
 app.config["SQLALCHEMY_DATABASE_URI"]=db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"]=False
-app.config["MAX_CONTENT_LENGTH"]=6*1024*1024
+app.config["MAX_CONTENT_LENGTH"]=45*1024*1024
 db=SQLAlchemy(app)
 SYSTEM_RESET_TOKEN=os.getenv("SYSTEM_RESET_TOKEN","").strip()
 CANDIDATE_ELIGIBILITY_TOKEN=os.getenv("CANDIDATE_ELIGIBILITY_TOKEN",SYSTEM_RESET_TOKEN).strip()
@@ -129,6 +129,17 @@ POSITIONS=[
  ("mca","MCA","ward"),
 ]
 
+PDF_DOCUMENTS=[
+ ("id_copy","Copy of ID"),
+ ("signed_application_form","Scanned and Signed Application Form"),
+ ("eacc_clearance","EACC Clearance"),
+ ("income_tax_clearance","Income Tax Clearance"),
+ ("good_conduct_certificate","Certificate of Good Conduct"),
+ ("life_membership_certificate","Life Membership Certificate Copy"),
+ ("signed_code_of_conduct","Signed Code of Conduct"),
+]
+GOVERNOR_PDF_DOCUMENT=("academic_certificate","Copy of Highest Academic Certificate")
+
 class Candidate(db.Model):
     id=db.Column(db.Integer,primary_key=True)
     candidate_id=db.Column(db.String(80),unique=True,nullable=False,index=True)
@@ -145,6 +156,14 @@ class Candidate(db.Model):
     photo=db.Column(db.LargeBinary)
     photo_mime=db.Column(db.String(80))
     photo_validated=db.Column(db.Boolean,default=False,nullable=False)
+    id_copy=db.Column(db.LargeBinary)
+    signed_application_form=db.Column(db.LargeBinary)
+    eacc_clearance=db.Column(db.LargeBinary)
+    income_tax_clearance=db.Column(db.LargeBinary)
+    good_conduct_certificate=db.Column(db.LargeBinary)
+    life_membership_certificate=db.Column(db.LargeBinary)
+    signed_code_of_conduct=db.Column(db.LargeBinary)
+    academic_certificate=db.Column(db.LargeBinary)
     status=db.Column(db.String(20),default="active",nullable=False,index=True)
     approval_status=db.Column(db.String(20),default="not_submitted",nullable=False,index=True)
     rejection_reason=db.Column(db.String(80))
@@ -169,6 +188,9 @@ with app.app_context():
         db.session.execute(text("ALTER TABLE candidate ADD COLUMN rejection_reason VARCHAR(80)"))
     if "application_date" not in candidate_columns:
         db.session.execute(text("ALTER TABLE candidate ADD COLUMN application_date VARCHAR(40)"))
+    for document_column,_document_label in (*PDF_DOCUMENTS,GOVERNOR_PDF_DOCUMENT):
+        if document_column not in candidate_columns:
+            db.session.execute(text(f"ALTER TABLE candidate ADD COLUMN {document_column} BYTEA"))
     if db.session.get(PortalState,1) is None:
         db.session.add(PortalState(id=1,candidate_list_final=False))
     # Older incomplete records must be reviewed again and cannot remain accepted.
@@ -305,6 +327,39 @@ def validated_image_upload(upload, field_label, max_bytes=5*1024*1024):
     else:
         raise ValueError(f"{field_label} must be a valid JPG, PNG or WebP image.")
     return data, mime
+
+def validated_pdf_upload(upload,field_label,max_bytes=5*1024*1024):
+    """Accept only a real PDF payload, not a renamed image or executable."""
+    if not upload or not str(upload.filename or "").strip():
+        return None
+    data=upload.read(max_bytes+1)
+    if not data:
+        raise ValueError(f"{field_label} is empty.")
+    if len(data)>max_bytes:
+        raise ValueError(f"{field_label} must not exceed 5 MB.")
+    if not data.startswith(b"%PDF-"):
+        raise ValueError(f"{field_label} must be a valid PDF file.")
+    if b"%%EOF" not in data[-4096:]:
+        raise ValueError(f"{field_label} is incomplete or damaged. Upload a complete PDF.")
+    return data
+
+def candidate_required_documents(c):
+    documents=list(PDF_DOCUMENTS)
+    if c and c.position=="governor":
+        documents.append(GOVERNOR_PDF_DOCUMENT)
+    return documents
+
+def candidate_missing_documents(c):
+    return [label for field,label in candidate_required_documents(c) if not getattr(c,field,None)]
+
+def save_candidate_pdf_uploads(c):
+    changed=False
+    for field,label in (*PDF_DOCUMENTS,GOVERNOR_PDF_DOCUMENT):
+        upload=request.files.get(field)
+        if upload and str(upload.filename or "").strip():
+            setattr(c,field,validated_pdf_upload(upload,label))
+            changed=True
+    return changed
 
 _FACE_CASCADES=[cv2.CascadeClassifier(os.path.join(cv2.data.haarcascades,name)) for name in (
     "haarcascade_frontalface_default.xml",
@@ -756,6 +811,8 @@ def render_candidate_form_page(candidate=None, **context):
         self_service=self_service,
         verified_member=verified_member,
         list_locked=candidate_list_is_final(),
+        pdf_documents=PDF_DOCUMENTS,
+        governor_pdf_document=GOVERNOR_PDF_DOCUMENT,
         **context
     )
 
@@ -900,6 +957,7 @@ def dashboard():
     return render_template(
         "dashboard.html",candidates=candidates,positions=POSITIONS,state=state,
         hierarchy=hierarchy_payload(),selected_filters=selected_filters,
+        pdf_documents=PDF_DOCUMENTS,governor_pdf_document=GOVERNOR_PDF_DOCUMENT,
         csrf_token=admin_csrf_token(),level2_configured=bool(LEVEL2_ADMIN_USERNAME and LEVEL2_ADMIN_PASSWORD_HASH),
         message=session.pop("candidate_admin_message",None),
         error=session.pop("candidate_admin_error",None)
@@ -969,6 +1027,10 @@ def candidate_decision(candidate_id):
         abort(400)
     if decision=="approved" and (not c.photo or not c.photo_validated):
         session["candidate_admin_error"]="This application cannot be Accepted until the passport photo has passed validation."
+        return return_to_filtered_dashboard()
+    missing_documents=candidate_missing_documents(c)
+    if decision=="approved" and missing_documents:
+        session["candidate_admin_error"]="This application cannot be Accepted until these PDF documents are attached: "+", ".join(missing_documents)+"."
         return return_to_filtered_dashboard()
     if decision=="rejected" and rejection_reason!="improper_candidate_picture":
         session["candidate_admin_error"]="Select Invalid passport photo before rejecting the application."
@@ -1111,9 +1173,17 @@ def save_candidate(c):
                     changed=True
                 except (ValueError,RuntimeError) as exc:
                     return render_candidate_form_page(c,error=str(exc))
+            try:
+                if save_candidate_pdf_uploads(c):
+                    changed=True
+            except ValueError as exc:
+                return render_candidate_form_page(c,error=str(exc))
 
             if not changed:
-                return render_candidate_form_page(c,error="Select, crop and confirm a replacement passport photo before saving.")
+                return render_candidate_form_page(c,error="Select a passport photo or PDF document before saving.")
+            missing_documents=candidate_missing_documents(c)
+            if missing_documents:
+                return render_candidate_form_page(c,error="Attach the following required PDF documents: "+", ".join(missing_documents)+".")
             c.approval_status="pending" if c.photo and c.photo_validated else "not_submitted"
             if c.approval_status=="pending" and not c.application_date:
                 c.application_date=datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -1246,6 +1316,13 @@ def save_candidate(c):
             return render_candidate_form_page(c,error=str(exc))
     if not c.photo:
         return render_candidate_form_page(c,error="Passport Photo is required. Select, crop and confirm a passport photo before saving the application.")
+    try:
+        save_candidate_pdf_uploads(c)
+    except ValueError as exc:
+        return render_candidate_form_page(c,error=str(exc))
+    missing_documents=candidate_missing_documents(c)
+    if missing_documents:
+        return render_candidate_form_page(c,error="Attach the following required PDF documents: "+", ".join(missing_documents)+".")
 
     if c.photo and c.photo_validated:
         c.approval_status="pending"
@@ -1277,6 +1354,24 @@ def candidate_photo(candidate_id):
     if not c.photo:
         abort(404)
     return Response(c.photo,content_type=c.photo_mime or "image/jpeg")
+
+@app.get("/candidate-document/<int:candidate_id>/<document_key>")
+def candidate_document(candidate_id,document_key):
+    c=Candidate.query.get_or_404(candidate_id)
+    if not candidate_can_access(c):
+        abort(403)
+    allowed=dict((*PDF_DOCUMENTS,GOVERNOR_PDF_DOCUMENT))
+    if document_key not in allowed:
+        abort(404)
+    data=getattr(c,document_key,None)
+    if not data:
+        abort(404)
+    filename=f"{c.candidate_id}_{document_key}.pdf"
+    return Response(
+        data,
+        content_type="application/pdf",
+        headers={"Content-Disposition":f'inline; filename="{filename}"',"X-Content-Type-Options":"nosniff"}
+    )
 
 @app.get("/api/candidates")
 def api_candidates():

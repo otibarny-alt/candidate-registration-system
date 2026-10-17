@@ -84,6 +84,32 @@
 </div>
 {% endif %}
 </div>
+<div class="candidate-pdf-documents">
+  <h3>Required PDF Attachments</h3>
+  <p class="muted">Upload clear PDF copies only. Each document must not exceed 5 MB.</p>
+  {% for field,label in pdf_documents %}
+  <div class="candidate-document-field">
+    <label for="{{field}}">{{label}}</label>
+    <input type="file" id="{{field}}" name="{{field}}" accept="application/pdf,.pdf"
+      {% if existing_candidate and candidate.approval_status not in ['pending','not_submitted'] %}disabled{% endif %}
+      {% if not candidate or not candidate|attr(field) %}required{% endif %}>
+    {% if candidate and candidate|attr(field) %}
+    <a class="document-view-link" target="_blank" rel="noopener" href="{{url_for('candidate_document',candidate_id=candidate.id,document_key=field)}}">View saved PDF</a>
+    {% endif %}
+  </div>
+  {% endfor %}
+  {% set academic_field=governor_pdf_document[0] %}
+  {% set academic_label=governor_pdf_document[1] %}
+  <div class="candidate-document-field" id="governorAcademicDocument">
+    <label for="{{academic_field}}">{{academic_label}}</label>
+    <input type="file" id="{{academic_field}}" name="{{academic_field}}" accept="application/pdf,.pdf"
+      {% if existing_candidate and candidate.approval_status not in ['pending','not_submitted'] %}disabled{% endif %}
+      {% if (not candidate or not candidate|attr(academic_field)) and ((candidate and candidate.position=='governor') or not candidate) %}required{% endif %}>
+    {% if candidate and candidate|attr(academic_field) %}
+    <a class="document-view-link" target="_blank" rel="noopener" href="{{url_for('candidate_document',candidate_id=candidate.id,document_key=academic_field)}}">View saved PDF</a>
+    {% endif %}
+  </div>
+</div>
 <label>Short Biography</label><textarea name=bio rows=7 placeholder="Candidate biography, experience, priorities, etc." {% if existing_candidate %}disabled{% endif %}>{{candidate.bio if candidate else ''}}</textarea>
 {% if not list_locked %}<div class="form-actions">
   {% if not existing_candidate %}<button type="submit">Validate Passport Photo &amp; Submit Application</button>{% elif candidate.approval_status=='not_submitted' %}<button type="submit">Validate Passport Photo &amp; Submit Application</button>{% elif pending_document_edit %}<button type="submit">Save Passport Photo Change</button>{% elif correction_photo %}<button type="submit">Submit Corrected Passport Photo</button>{% else %}<span class="view-only-message">No fields are open for editing.</span>{% endif %}
@@ -107,6 +133,11 @@ function applyScope(){
  document.getElementById('countyBox').style.display=scope==='national'?'none':'block';
  document.getElementById('constBox').style.display=['constituency','ward'].includes(scope)?'block':'none';
  document.getElementById('wardBox').style.display=scope==='ward'?'block':'none';
+ const governorDocument=document.getElementById('governorAcademicDocument');
+ const academicInput=document.getElementById('academic_certificate');
+ const isGovernor=position.value==='governor';
+ governorDocument.style.display=isGovernor?'block':'none';
+ academicInput.required=isGovernor && !governorDocument.querySelector('.document-view-link');
 }
 position.onchange=applyScope;
 county.onchange=()=>{

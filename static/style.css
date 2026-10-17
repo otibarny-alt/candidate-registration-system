@@ -82,3 +82,4 @@ input:disabled,select:disabled,textarea:disabled{cursor:not-allowed;opacity:.72;
  .crop-controls{grid-template-columns:1fr}
  .crop-controls button{width:100%}
 }
+.candidate-pdf-documents{grid-column:1/-1;border:1px solid #e5e7eb;border-radius:12px;padding:16px;background:#fafafa}.candidate-pdf-documents h3{margin:0 0 6px}.candidate-document-field{margin-top:12px}.candidate-document-field input[type=file]{display:block;width:100%;margin-top:6px}.document-view-link{display:inline-block;margin-top:6px;font-weight:700}.candidate-document-links{display:flex;flex-direction:column;gap:5px;margin-top:8px;font-size:12px}
