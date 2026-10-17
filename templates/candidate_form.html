@@ -7,10 +7,15 @@
 <div class=wrap><div class=card><img class="candidate-portal-banner" src="{{ party_brand.header_url or url_for('static', filename='odm_orange_voting_banner.png') }}" alt="{{ party_brand.abbreviation }} 2027 Party Primaries Voting System">{% if self_service %}<nav class="portal-card-nav"><a href=/candidate/logout>Candidate Logout</a></nav>{% endif %}<div class="candidate-form-heading"><h2>{{"Edit Candidate" if candidate else "Register Candidate"}}</h2>{% if not candidate %}<a class="btn status-login-link" href="{{url_for('candidate_access')}}">Already registered? View Status / Edit Application</a>{% endif %}</div>
 {% if self_service %}<div class="privacy-notice"><b>Private application:</b> You are viewing only your own candidate information.</div>{% endif %}
 {% if list_locked %}<div class="central-lock central-lock-final"><h3>🔒 FINAL CANDIDATE LIST — EDITING LOCKED</h3><p>This application is available for viewing only. No changes can be saved unless a Level 2 administrator unlocks the candidate list.</p></div>{% endif %}
-{% if self_service and candidate %}<div class="decision-notice decision-{{candidate.approval_status or 'not_submitted'}}"><b>Application status:</b> {% if candidate.approval_status=='approved' %}ACCEPTED{% elif candidate.approval_status=='rejected' %}REJECTED{% elif candidate.approval_status=='pending' %}PENDING APPROVAL{% else %}NOT SUBMITTED{% endif %}{% if candidate.approval_status == 'not_submitted' %} — the application has not been sent for administrator review. Complete all required documents to submit it.{% elif candidate.approval_status == 'pending' %} — your application is awaiting administrator review. Submitted documents may be replaced while review is pending; all personal and electoral fields are locked.{% elif candidate.approval_status == 'approved' %} — your application is accepted for inclusion on the ballot. All fields are locked.{% else %} — your application is not included on the ballot.<br><b>Documents requiring correction:</b>{% if rejection_document_labels %}<ul class="candidate-rejection-list">{% for label in rejection_document_labels %}<li>{{label}}</li>{% endfor %}</ul><span>Only the documents listed above are open for replacement.</span>{% else %} Contact the candidate registration administrator because no document reason was recorded.{% endif %}{% endif %}</div>{% endif %}
+{% if self_service and candidate %}<div class="decision-notice decision-{{candidate.approval_status or 'not_submitted'}}"><b>Application status:</b> {% if candidate.approval_status=='approved' %}ACCEPTED{% elif candidate.approval_status=='rejected' %}REJECTED{% elif candidate.approval_status=='pending' %}PENDING APPROVAL{% else %}IN PROGRESS{% endif %}{% if candidate.approval_status == 'not_submitted' %} — your progress is saved. Add the remaining uploads when available.{% elif candidate.approval_status == 'pending' %} — your application is complete and awaiting administrator review. Email, biography, declarations and uploads remain editable during review.{% elif candidate.approval_status == 'approved' %} — your application is accepted for inclusion on the ballot. All fields are locked.{% else %} — your application is not included on the ballot.<br><b>Documents requiring correction:</b>{% if rejection_document_labels %}<ul class="candidate-rejection-list">{% for label in rejection_document_labels %}<li>{{label}}</li>{% endfor %}</ul><span>You may save available corrections progressively.</span>{% else %} Update the editable application details and save your progress.{% endif %}{% endif %}</div>{% endif %}
 {% if self_service and verified_member.geography_verified %}<div class="eligibility-notice"><b>Your verified voter area:</b> {{verified_member.county|replace('_',' ')|title}} · {{verified_member.constituency|replace('_',' ')|title}} · {{verified_member.ward|replace('_',' ')|title}}{% if verified_member.polling_station %}<br><b>Polling station:</b> {{verified_member.polling_station|replace('_',' ')|title}}{% endif %}<br><span>Governor, Senator and Woman Representative applications are restricted to this county; MNA to this constituency; and MCA to this ward. President is national.</span></div>{% elif self_service %}<div class="error">Your voter area could not be refreshed. Please log out and sign in again before editing a non-presidential application.</div>{% endif %}
-{% if saved %}<div class="success">Your candidate application documents have been saved successfully.</div>{% endif %}
+{% if saved %}<div class="success">Your application progress has been saved successfully. You may return later to add the remaining uploads.</div>{% endif %}
 {% if error %}<div class=error>{{error}}</div>{% endif %}
+<div class="application-progress" id="applicationProgress" data-server-percent="{{application_progress.percent}}">
+  <div class="application-progress-heading"><b>Application completion</b><span id="applicationProgressPercent">{{application_progress.percent}}%</span></div>
+  <div class="application-progress-track" role="progressbar" aria-label="Application completion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{application_progress.percent}}"><div id="applicationProgressFill" class="application-progress-fill" style="width:{{application_progress.percent}}%"></div></div>
+  <small id="applicationProgressText">{{application_progress.completed}} of {{application_progress.total}} currently applicable uploads saved. You can save available documents and return later.</small>
+</div>
 <form method=post enctype=multipart/form-data id=candidateForm><fieldset class="form-lock-fieldset" {% if list_locked %}disabled{% endif %}>
 <div class=grid>
 <div><label>National ID</label>
@@ -33,22 +38,21 @@
 
 <div><label>Phone</label><input id="phone" name=phone readonly value="{{candidate.phone if candidate else (verified_member.phone if verified_member else '')}}"><small class="muted">Pulled from Kobo.</small></div>
 
-<div><label>Email</label><input id="email" name=email readonly value="{{candidate.email if candidate else (verified_member.email if verified_member else '')}}"><small class="muted">Pulled from the authoritative membership source when available.</small></div>
+<div><label>Email</label><input id="email" name=email type="email" {% if candidate and candidate.approval_status=='approved' %}readonly{% endif %} value="{{candidate.email if candidate else (verified_member.email if verified_member else '')}}"><small class="muted">You may update the email address before approval.</small></div>
 
 <div><label>Membership No.</label><input id="membership_no" name=membership_no readonly value="{{candidate.membership_no if candidate else (verified_member.membership_no if verified_member else '')}}"><small class="muted">Pulled from Kobo.</small></div>
 
 <div class="plwd-question-field"><label for="living_with_disability">Are you a Person Living with Disability?</label>
-<select name="living_with_disability" id="living_with_disability" required {% if existing_candidate %}disabled{% endif %}>
+<select name="living_with_disability" id="living_with_disability" required {% if candidate and candidate.approval_status=='approved' %}disabled{% endif %}>
 <option value="">Select YES or NO</option>
 <option value="yes" {% if candidate and candidate.living_with_disability %}selected{% endif %}>YES</option>
 <option value="no" {% if candidate and not candidate.living_with_disability %}selected{% endif %}>NO</option>
 </select>
-<div class="candidate-document-field" id="plwdIdentificationDocument">
+<div class="candidate-document-field" id="plwdIdentificationDocument" style="display:{{'block' if candidate and candidate.living_with_disability else 'none'}}">
 {% set plwd_field=plwd_pdf_document[0] %}
 <label for="{{plwd_field}}">{{plwd_pdf_document[1]}} (PDF)</label>
 <input type="file" id="{{plwd_field}}" name="{{plwd_field}}" accept="application/pdf,.pdf"
-  {% if existing_candidate and candidate.approval_status not in ['pending','not_submitted'] and plwd_field not in rejected_document_keys %}disabled{% endif %}
-  {% if candidate and candidate.living_with_disability and not candidate|attr(plwd_field) %}required{% endif %}>
+  {% if candidate and candidate.approval_status=='approved' %}disabled{% endif %}>
 {% if candidate and candidate|attr(plwd_field) %}
 <a class="document-view-link" target="_blank" rel="noopener" href="{{url_for('candidate_document',candidate_id=candidate.id,document_key=plwd_field)}}">View saved PDF</a>
 {% endif %}
@@ -57,17 +61,16 @@
 </div>
 
 <div class="public-officer-question-field"><label for="public_officer_recently_resigned">Are you a Public Officer who has recently Resigned?</label>
-<select name="public_officer_recently_resigned" id="public_officer_recently_resigned" required {% if existing_candidate %}disabled{% endif %}>
+<select name="public_officer_recently_resigned" id="public_officer_recently_resigned" required {% if candidate and candidate.approval_status=='approved' %}disabled{% endif %}>
 <option value="">Select YES or NO</option>
 <option value="yes" {% if candidate and candidate.public_officer_recently_resigned %}selected{% endif %}>YES</option>
 <option value="no" {% if candidate and not candidate.public_officer_recently_resigned %}selected{% endif %}>NO</option>
 </select>
-<div class="candidate-document-field" id="publicOfficerResignationDocument">
+<div class="candidate-document-field" id="publicOfficerResignationDocument" style="display:{{'block' if candidate and candidate.public_officer_recently_resigned else 'none'}}">
 {% set resignation_field=public_officer_pdf_document[0] %}
 <label for="{{resignation_field}}">{{public_officer_pdf_document[1]}} (PDF)</label>
 <input type="file" id="{{resignation_field}}" name="{{resignation_field}}" accept="application/pdf,.pdf"
-  {% if existing_candidate and candidate.approval_status not in ['pending','not_submitted'] and resignation_field not in rejected_document_keys %}disabled{% endif %}
-  {% if candidate and candidate.public_officer_recently_resigned and not candidate|attr(resignation_field) %}required{% endif %}>
+  {% if candidate and candidate.approval_status=='approved' %}disabled{% endif %}>
 {% if candidate and candidate|attr(resignation_field) %}
 <a class="document-view-link" target="_blank" rel="noopener" href="{{url_for('candidate_document',candidate_id=candidate.id,document_key=resignation_field)}}">View saved PDF</a>
 {% endif %}
@@ -76,17 +79,16 @@
 </div>
 
 <div class="bankruptcy-question-field"><label for="ever_declared_bankrupt">Have you ever been declared bankrupt?</label>
-<select name="ever_declared_bankrupt" id="ever_declared_bankrupt" required {% if existing_candidate %}disabled{% endif %}>
+<select name="ever_declared_bankrupt" id="ever_declared_bankrupt" required {% if candidate and candidate.approval_status=='approved' %}disabled{% endif %}>
 <option value="">Select YES or NO</option>
 <option value="yes" {% if candidate and candidate.ever_declared_bankrupt %}selected{% endif %}>YES</option>
 <option value="no" {% if candidate and not candidate.ever_declared_bankrupt %}selected{% endif %}>NO</option>
 </select>
-<div class="candidate-document-field" id="bankruptcyDischargeDocument">
+<div class="candidate-document-field" id="bankruptcyDischargeDocument" style="display:{{'block' if candidate and candidate.ever_declared_bankrupt else 'none'}}">
 {% set bankruptcy_field=bankruptcy_pdf_document[0] %}
 <label for="{{bankruptcy_field}}">{{bankruptcy_pdf_document[1]}} (PDF)</label>
 <input type="file" id="{{bankruptcy_field}}" name="{{bankruptcy_field}}" accept="application/pdf,.pdf"
-  {% if existing_candidate and candidate.approval_status not in ['pending','not_submitted'] and bankruptcy_field not in rejected_document_keys %}disabled{% endif %}
-  {% if candidate and candidate.ever_declared_bankrupt and not candidate|attr(bankruptcy_field) %}required{% endif %}>
+  {% if candidate and candidate.approval_status=='approved' %}disabled{% endif %}>
 {% if candidate and candidate|attr(bankruptcy_field) %}
 <a class="document-view-link" target="_blank" rel="noopener" href="{{url_for('candidate_document',candidate_id=candidate.id,document_key=bankruptcy_field)}}">View saved PDF</a>
 {% endif %}
@@ -95,17 +97,16 @@
 </div>
 
 <div class="appeal-question-field"><label for="sentence_decision_appealed">Are You subject of a Sentence and have appealed the Decision?</label>
-<select name="sentence_decision_appealed" id="sentence_decision_appealed" required {% if existing_candidate %}disabled{% endif %}>
+<select name="sentence_decision_appealed" id="sentence_decision_appealed" required {% if candidate and candidate.approval_status=='approved' %}disabled{% endif %}>
 <option value="">Select YES or NO</option>
 <option value="yes" {% if candidate and candidate.sentence_decision_appealed %}selected{% endif %}>YES</option>
 <option value="no" {% if candidate and not candidate.sentence_decision_appealed %}selected{% endif %}>NO</option>
 </select>
-<div class="candidate-document-field" id="appealReviewEvidenceDocument">
+<div class="candidate-document-field" id="appealReviewEvidenceDocument" style="display:{{'block' if candidate and candidate.sentence_decision_appealed else 'none'}}">
 {% set appeal_field=appeal_review_pdf_document[0] %}
 <label for="{{appeal_field}}">{{appeal_review_pdf_document[1]}} (PDF)</label>
 <input type="file" id="{{appeal_field}}" name="{{appeal_field}}" accept="application/pdf,.pdf"
-  {% if existing_candidate and candidate.approval_status not in ['pending','not_submitted'] and appeal_field not in rejected_document_keys %}disabled{% endif %}
-  {% if candidate and candidate.sentence_decision_appealed and not candidate|attr(appeal_field) %}required{% endif %}>
+  {% if candidate and candidate.approval_status=='approved' %}disabled{% endif %}>
 {% if candidate and candidate|attr(appeal_field) %}
 <a class="document-view-link" target="_blank" rel="noopener" href="{{url_for('candidate_document',candidate_id=candidate.id,document_key=appeal_field)}}">View saved PDF</a>
 {% endif %}
@@ -114,17 +115,16 @@
 </div>
 
 <div class="chapter-six-question-field"><label for="chapter_six_conviction_appealed">Have you ever been convicted of contravening Chapter Six of the Constitution and have appealed the Decision?</label>
-<select name="chapter_six_conviction_appealed" id="chapter_six_conviction_appealed" required {% if existing_candidate %}disabled{% endif %}>
+<select name="chapter_six_conviction_appealed" id="chapter_six_conviction_appealed" required {% if candidate and candidate.approval_status=='approved' %}disabled{% endif %}>
 <option value="">Select YES or NO</option>
 <option value="yes" {% if candidate and candidate.chapter_six_conviction_appealed %}selected{% endif %}>YES</option>
 <option value="no" {% if candidate and not candidate.chapter_six_conviction_appealed %}selected{% endif %}>NO</option>
 </select>
-<div class="candidate-document-field" id="chapterSixAppealEvidenceDocument">
+<div class="candidate-document-field" id="chapterSixAppealEvidenceDocument" style="display:{{'block' if candidate and candidate.chapter_six_conviction_appealed else 'none'}}">
 {% set chapter_six_field=chapter_six_appeal_pdf_document[0] %}
 <label for="{{chapter_six_field}}">{{chapter_six_appeal_pdf_document[1]}} (PDF)</label>
 <input type="file" id="{{chapter_six_field}}" name="{{chapter_six_field}}" accept="application/pdf,.pdf"
-  {% if existing_candidate and candidate.approval_status not in ['pending','not_submitted'] and chapter_six_field not in rejected_document_keys %}disabled{% endif %}
-  {% if candidate and candidate.chapter_six_conviction_appealed and not candidate|attr(chapter_six_field) %}required{% endif %}>
+  {% if candidate and candidate.approval_status=='approved' %}disabled{% endif %}>
 {% if candidate and candidate|attr(chapter_six_field) %}
 <a class="document-view-link" target="_blank" rel="noopener" href="{{url_for('candidate_document',candidate_id=candidate.id,document_key=chapter_six_field)}}">View saved PDF</a>
 {% endif %}
@@ -145,8 +145,8 @@
 <div id=wardBox><label>Ward</label><select name=ward id=ward {% if existing_candidate %}disabled{% endif %}><option value="">Select Ward</option></select></div>
 <div class="candidate-photo-field">
 <label>Passport Photo</label>
-<input type="file" id="photo_input" accept="image/jpeg,image/png,image/webp,image/*" {% if existing_candidate and not (pending_document_edit or correction_photo) %}disabled{% endif %} {% if not candidate or not candidate.photo or correction_photo %}required{% endif %}>
-<small class="muted">{% if pending_document_edit %}Optional: select, crop and confirm a replacement passport photo.{% elif correction_photo %}Open for correction: select and crop a fresh passport photo.{% elif existing_candidate %}Passport photo is locked for this application status.{% else %}Required. Select an image, crop it and click “Crop &amp; Use Photo” before saving.{% endif %} Background validation is disabled. The saved portrait must remain readable and show the candidate's face.</small>
+<input type="file" id="photo_input" accept="image/jpeg,image/png,image/webp,image/*" {% if candidate and candidate.approval_status=='approved' %}disabled{% endif %}>
+<small class="muted">Optional while saving progress. A validated passport photo is required before the application can move to administrator review. Background validation is disabled; the saved portrait must remain readable and show the candidate's face.</small>
 <input type="hidden" name="cropped_photo" id="cropped_photo">
 
 <div id="cropper_wrap" class="cropper-wrap" hidden>
@@ -170,7 +170,7 @@
   <img id="cropped_preview" class="cropped-preview" alt="Cropped passport photo preview">
   <div class="lookup-status lookup-success">✓ Crop confirmed. Complete submission using the button below.</div>
   {% if not list_locked and (not existing_candidate or candidate.approval_status=='not_submitted' or pending_document_edit or correction_photo) %}
-  <button type="submit" id="photo_submit_btn" class="photo-final-submit">{% if pending_document_edit %}Save Passport Photo Change{% elif correction_photo %}Submit Corrected Passport Photo{% else %}Validate Photo &amp; Submit Application{% endif %}</button>
+  <button type="submit" id="photo_submit_btn" class="photo-final-submit">Save Application Progress</button>
   {% endif %}
 </div>
 
@@ -182,8 +182,8 @@
 {% endif %}
 </div>
 <div class="candidate-pdf-documents">
-  <h3>Required PDF Attachments</h3>
-  <p class="muted">Upload clear PDF copies only. Each document must not exceed 5 MB.</p>
+  <h3>Application PDF Attachments</h3>
+  <p class="muted">Upload available clear PDF copies and save your progress. Each document must not exceed 5 MB. All applicable documents must be present before administrator review.</p>
   {% for field,label in pdf_documents %}
   <div class="candidate-document-field">
     <label for="{{field}}">
@@ -196,8 +196,7 @@
       {% endif %}
     </label>
     <input type="file" id="{{field}}" name="{{field}}" accept="application/pdf,.pdf"
-      {% if existing_candidate and candidate.approval_status not in ['pending','not_submitted'] and field not in rejected_document_keys %}disabled{% endif %}
-      {% if not candidate or not candidate|attr(field) %}required{% endif %}>
+      {% if existing_candidate and candidate.approval_status not in ['pending','not_submitted'] and field not in rejected_document_keys %}disabled{% endif %}>
     {% if candidate and candidate|attr(field) %}
     <a class="document-view-link" target="_blank" rel="noopener" href="{{url_for('candidate_document',candidate_id=candidate.id,document_key=field)}}">View saved PDF</a>
     {% endif %}
@@ -205,19 +204,18 @@
   {% endfor %}
   {% set academic_field=governor_pdf_document[0] %}
   {% set academic_label=governor_pdf_document[1] %}
-  <div class="candidate-document-field" id="governorAcademicDocument">
+  <div class="candidate-document-field" id="governorAcademicDocument" style="display:{{'block' if candidate and candidate.position=='governor' else 'none'}}">
     <label for="{{academic_field}}">{{academic_label}}</label>
     <input type="file" id="{{academic_field}}" name="{{academic_field}}" accept="application/pdf,.pdf"
-      {% if existing_candidate and candidate.approval_status not in ['pending','not_submitted'] and academic_field not in rejected_document_keys %}disabled{% endif %}
-      {% if (not candidate or not candidate|attr(academic_field)) and ((candidate and candidate.position=='governor') or not candidate) %}required{% endif %}>
+      {% if existing_candidate and candidate.approval_status not in ['pending','not_submitted'] and academic_field not in rejected_document_keys %}disabled{% endif %}>
     {% if candidate and candidate|attr(academic_field) %}
     <a class="document-view-link" target="_blank" rel="noopener" href="{{url_for('candidate_document',candidate_id=candidate.id,document_key=academic_field)}}">View saved PDF</a>
     {% endif %}
   </div>
 </div>
-<label>Short Biography</label><textarea name=bio rows=7 placeholder="Candidate biography, experience, priorities, etc." {% if existing_candidate %}disabled{% endif %}>{{candidate.bio if candidate else ''}}</textarea>
+<label>Short Biography</label><textarea name=bio rows=7 placeholder="Candidate biography, experience, priorities, etc." {% if candidate and candidate.approval_status=='approved' %}disabled{% endif %}>{{candidate.bio if candidate else ''}}</textarea>
 {% if not list_locked %}<div class="form-actions">
-  {% if not existing_candidate %}<button type="submit">Validate Passport Photo &amp; Submit Application</button>{% elif candidate.approval_status=='not_submitted' %}<button type="submit">Validate Passport Photo &amp; Submit Application</button>{% elif pending_document_edit %}<button type="submit">Save Document Changes</button>{% elif correction_documents %}<button type="submit">Submit Corrected Documents</button>{% else %}<span class="view-only-message">No fields are open for editing.</span>{% endif %}
+  {% if not existing_candidate or candidate.approval_status in ['not_submitted','pending','rejected'] %}<button type="submit">Save Application Progress</button>{% else %}<span class="view-only-message">This accepted application is view-only.</span>{% endif %}
   <a class="btn cancel-edit-btn" href="{{ url_for('candidate_home') if self_service else url_for('dashboard') }}">Cancel Edit</a>
 </div>{% endif %}
 </fieldset></form></div></div>
@@ -247,22 +245,23 @@ function applyScope(){
  const academicInput=document.getElementById('academic_certificate');
  const isGovernor=position.value==='governor';
  governorDocument.style.display=isGovernor?'block':'none';
- academicInput.required=isGovernor && !governorDocument.querySelector('.document-view-link');
+ academicInput.required=false;
  const isPlwd=plwdAnswer.value==='yes';
  plwdDocument.style.display=isPlwd?'block':'none';
- plwdInput.required=isPlwd && !plwdDocument.querySelector('.document-view-link');
+ plwdInput.required=false;
  const hasResigned=publicOfficerAnswer.value==='yes';
  resignationDocument.style.display=hasResigned?'block':'none';
- resignationInput.required=hasResigned && !resignationDocument.querySelector('.document-view-link');
+ resignationInput.required=false;
  const wasBankrupt=bankruptcyAnswer.value==='yes';
  bankruptcyDocument.style.display=wasBankrupt?'block':'none';
- bankruptcyInput.required=wasBankrupt && !bankruptcyDocument.querySelector('.document-view-link');
+ bankruptcyInput.required=false;
  const hasAppealed=appealAnswer.value==='yes';
  appealDocument.style.display=hasAppealed?'block':'none';
- appealInput.required=hasAppealed && !appealDocument.querySelector('.document-view-link');
+ appealInput.required=false;
  const chapterSixAppealed=chapterSixAnswer.value==='yes';
  chapterSixDocument.style.display=chapterSixAppealed?'block':'none';
- chapterSixInput.required=chapterSixAppealed && !chapterSixDocument.querySelector('.document-view-link');
+ chapterSixInput.required=false;
+ updateApplicationProgress();
 }
 position.onchange=applyScope;
 plwdAnswer.onchange=applyScope;
@@ -379,6 +378,65 @@ candidateForm.addEventListener('submit',e=>{
     lookupStatus.scrollIntoView({behavior:'smooth',block:'center'});
   }
 });
+
+function updateApplicationProgress(){
+  const photoInput=document.getElementById('photo_input');
+  const croppedPhoto=document.getElementById('cropped_photo');
+  const savedPhoto=!!document.querySelector('.existing-photo-wrap img');
+  let total=1;
+  let completed=(savedPhoto || (croppedPhoto && croppedPhoto.value) || (photoInput && photoInput.files.length))?1:0;
+  document.querySelectorAll('.candidate-document-field input[type="file"]').forEach(input=>{
+    const field=input.closest('.candidate-document-field');
+    if(!field || field.style.display==='none')return;
+    total+=1;
+    if(input.files.length || field.querySelector('.document-view-link'))completed+=1;
+  });
+  const percent=total?Math.round((completed*100)/total):100;
+  const fill=document.getElementById('applicationProgressFill');
+  const percentLabel=document.getElementById('applicationProgressPercent');
+  const text=document.getElementById('applicationProgressText');
+  const track=document.querySelector('.application-progress-track');
+  if(fill)fill.style.width=percent+'%';
+  if(percentLabel)percentLabel.textContent=percent+'%';
+  if(text)text.textContent=completed+' of '+total+' currently applicable uploads available. Save now and return later for the rest.';
+  if(track)track.setAttribute('aria-valuenow',String(percent));
+}
+
+document.querySelectorAll('#candidateForm input[type="file"]').forEach(input=>{
+  const removeButton=document.createElement('button');
+  removeButton.type='button';
+  removeButton.className='upload-cancel-button';
+  removeButton.textContent='Remove selected upload';
+  removeButton.hidden=true;
+  input.insertAdjacentElement('afterend',removeButton);
+  input.addEventListener('change',()=>{
+    removeButton.hidden=!input.files.length;
+    updateApplicationProgress();
+  });
+  removeButton.addEventListener('click',()=>{
+    input.value='';
+    removeButton.hidden=true;
+    if(input.id==='photo_input'){
+      const cropped=document.getElementById('cropped_photo');
+      const cropWrap=document.getElementById('cropper_wrap');
+      const previewWrap=document.getElementById('cropped_preview_wrap');
+      if(cropped)cropped.value='';
+      if(cropWrap)cropWrap.hidden=true;
+      if(previewWrap)previewWrap.hidden=true;
+    }
+    updateApplicationProgress();
+  });
+});
+const cropConfirmButton=document.getElementById('crop_confirm_btn');
+const cropCancelButton=document.getElementById('crop_cancel_btn');
+if(cropConfirmButton)cropConfirmButton.addEventListener('click',()=>setTimeout(updateApplicationProgress,0));
+if(cropCancelButton)cropCancelButton.addEventListener('click',()=>setTimeout(()=>{
+  const photoInput=document.getElementById('photo_input');
+  const removeButton=photoInput && photoInput.nextElementSibling;
+  if(removeButton && removeButton.classList.contains('upload-cancel-button'))removeButton.hidden=true;
+  updateApplicationProgress();
+},0));
+updateApplicationProgress();
 
 
 

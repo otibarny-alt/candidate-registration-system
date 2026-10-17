@@ -402,6 +402,37 @@ def candidate_required_documents(c):
 def candidate_missing_documents(c):
     return [label for field,label in candidate_required_documents(c) if not getattr(c,field,None)]
 
+def candidate_application_progress(c):
+    documents=candidate_required_documents(c) if c else list(PDF_DOCUMENTS)
+    total=1+len(documents)
+    completed=0
+    if c and c.photo and c.photo_validated:
+        completed+=1
+    if c:
+        completed+=sum(1 for field,_label in documents if getattr(c,field,None))
+    percent=round((completed*100)/total) if total else 100
+    return {"completed":completed,"total":total,"percent":percent}
+
+DECLARATION_FIELDS=(
+    ("living_with_disability","Are you a Person Living with Disability?"),
+    ("public_officer_recently_resigned","Are you a Public Officer who has recently Resigned?"),
+    ("ever_declared_bankrupt","Have you ever been declared bankrupt?"),
+    ("sentence_decision_appealed","Are You subject of a Sentence and have appealed the Decision?"),
+    ("chapter_six_conviction_appealed","Have you ever been convicted of contravening Chapter Six of the Constitution and have appealed the Decision?"),
+)
+
+def update_candidate_editable_fields(c, form):
+    email=form.get("email",c.email or "").strip()[:160]
+    if email and not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+",email):
+        raise ValueError("Enter a valid email address.")
+    c.email=email
+    c.bio=form.get("bio",c.bio or "").strip()
+    for field,label in DECLARATION_FIELDS:
+        answer=form.get(field,"").strip().lower()
+        if answer not in {"yes","no"}:
+            raise ValueError(f"Select YES or NO for {label}")
+        setattr(c,field,answer=="yes")
+
 def candidate_document_catalog(c):
     return [
         ("passport_photo","Passport Photo",bool(c and c.photo and c.photo_validated)),
@@ -897,6 +928,7 @@ def render_candidate_form_page(candidate=None, **context):
         chapter_six_appeal_pdf_document=CHAPTER_SIX_APPEAL_PDF_DOCUMENT,
         rejection_document_keys=candidate_rejection_keys(candidate) if candidate else [],
         rejection_document_labels=candidate_rejection_labels(candidate) if candidate else [],
+        application_progress=candidate_application_progress(candidate),
         **context
     )
 
@@ -1254,37 +1286,31 @@ def save_candidate(c):
     if candidate_list_is_final():
         return render_candidate_form_page(c,error="The candidate list is FINAL. No application changes are permitted until a Level 2 administrator unlocks it."),423
 
-    # Once submitted, the application particulars are immutable. A pending
-    # candidate may replace the passport photo while the application is
-    # awaiting review. Accepted applications are view-only. A rejected
-    # candidate may replace only the passport photo identified by the
-    # administrator; no posted value can alter their identity, position, area
-    # or biography.
+    # Accepted applications remain view-only. Draft, pending and rejected
+    # applicants may progressively save declarations, email, biography and
+    # available uploads. Identity, position and electoral area remain locked.
     if c is not None and candidate_logged_in():
         if c.approval_status=="approved":
             return render_candidate_form_page(c,error="This accepted application is view-only. No fields can be changed."),423
         if c.approval_status in {"pending","not_submitted"}:
-            changed=False
+            try:
+                update_candidate_editable_fields(c,request.form)
+            except ValueError as exc:
+                return render_candidate_form_page(c,error=str(exc))
             cropped_photo=request.form.get("cropped_photo","").strip()
             if cropped_photo:
                 try:
                     c.photo,c.photo_mime=validated_candidate_photo(cropped_photo)
                     c.photo_validated=True
-                    changed=True
                 except (ValueError,RuntimeError) as exc:
                     return render_candidate_form_page(c,error=str(exc))
             try:
-                if save_candidate_pdf_uploads(c):
-                    changed=True
+                save_candidate_pdf_uploads(c)
             except ValueError as exc:
                 return render_candidate_form_page(c,error=str(exc))
-
-            if not changed:
-                return render_candidate_form_page(c,error="Select a passport photo or PDF document before saving.")
             missing_documents=candidate_missing_documents(c)
-            if missing_documents:
-                return render_candidate_form_page(c,error="Attach the following required PDF documents: "+", ".join(missing_documents)+".")
-            c.approval_status="pending" if c.photo and c.photo_validated else "not_submitted"
+            complete=bool(c.photo and c.photo_validated and not missing_documents)
+            c.approval_status="pending" if complete else "not_submitted"
             if c.approval_status=="pending" and not c.application_date:
                 c.application_date=datetime.now(timezone.utc).isoformat(timespec="seconds")
             if candidate_list_is_final():
@@ -1295,34 +1321,46 @@ def save_candidate(c):
         if c.approval_status!="rejected":
             return render_candidate_form_page(c,error="This application is not open for editing."),423
 
+        try:
+            update_candidate_editable_fields(c,request.form)
+        except ValueError as exc:
+            return render_candidate_form_page(c,error=str(exc))
         rejection_keys=set(candidate_rejection_keys(c))
+        applicable_keys={key for key,_label,_present in candidate_document_catalog(c)}
+        rejection_keys &= applicable_keys
         if not rejection_keys:
-            return render_candidate_form_page(c,error="The administrator must select the rejected documents before a correction can be submitted."),423
+            c.rejection_reasons=None
         if "passport_photo" in rejection_keys:
             cropped_photo=request.form.get("cropped_photo","").strip()
-            if not cropped_photo:
-                return render_candidate_form_page(c,error="Select, crop and confirm a fresh passport photo before resubmitting this rejected application.")
-            try:
-                c.photo,c.photo_mime=validated_candidate_photo(cropped_photo)
-                c.photo_validated=True
-            except (ValueError,RuntimeError) as exc:
-                return render_candidate_form_page(c,error=str(exc))
+            if cropped_photo:
+                try:
+                    c.photo,c.photo_mime=validated_candidate_photo(cropped_photo)
+                    c.photo_validated=True
+                    rejection_keys.discard("passport_photo")
+                except (ValueError,RuntimeError) as exc:
+                    return render_candidate_form_page(c,error=str(exc))
         try:
             uploaded_documents=save_candidate_pdf_uploads(c)
         except ValueError as exc:
             return render_candidate_form_page(c,error=str(exc))
-        required_replacements=rejection_keys-{"passport_photo"}
-        not_replaced=required_replacements-set(uploaded_documents)
-        if not_replaced:
-            labels=dict((key,label) for key,label,_present in candidate_document_catalog(c))
-            return render_candidate_form_page(c,error="Upload fresh PDF replacements for: "+", ".join(labels.get(key,key) for key in sorted(not_replaced))+".")
+        rejection_keys-=set(uploaded_documents)
 
         if candidate_list_is_final():
             db.session.rollback()
             return render_candidate_form_page(c,error="The candidate list became FINAL while this correction was open. Your document was not saved."),423
-        c.approval_status="pending"
-        c.rejection_reason=None
-        c.rejection_reasons=None
+        missing_documents=candidate_missing_documents(c)
+        if rejection_keys:
+            c.approval_status="rejected"
+            c.rejection_reason="document_review"
+            c.rejection_reasons=json.dumps(sorted(rejection_keys))
+        elif c.photo and c.photo_validated and not missing_documents:
+            c.approval_status="pending"
+            c.rejection_reason=None
+            c.rejection_reasons=None
+        else:
+            c.approval_status="not_submitted"
+            c.rejection_reason=None
+            c.rejection_reasons=None
         db.session.commit()
         return redirect(url_for("candidate_edit",candidate_id=c.id,saved=1))
 
@@ -1383,7 +1421,9 @@ def save_candidate(c):
     c.full_name=member.get("full_name") or name
     c.national_id=national_id
     c.phone=member.get("phone","")
-    c.email=member.get("email","")
+    c.email=f.get("email",member.get("email","")).strip()[:160]
+    if c.email and not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+",c.email):
+        return render_candidate_form_page(c,error="Enter a valid email address.")
     c.membership_no=member.get("membership_no","")
     disability_answer=f.get("living_with_disability","").strip().lower()
     if not disability_answer and not is_new:
@@ -1455,17 +1495,12 @@ def save_candidate(c):
             c.photo_validated=True
         except (ValueError,RuntimeError) as exc:
             return render_candidate_form_page(c,error=str(exc))
-    if not c.photo:
-        return render_candidate_form_page(c,error="Passport Photo is required. Select, crop and confirm a passport photo before saving the application.")
     try:
         save_candidate_pdf_uploads(c)
     except ValueError as exc:
         return render_candidate_form_page(c,error=str(exc))
     missing_documents=candidate_missing_documents(c)
-    if missing_documents:
-        return render_candidate_form_page(c,error="Attach the following required PDF documents: "+", ".join(missing_documents)+".")
-
-    if c.photo and c.photo_validated:
+    if c.photo and c.photo_validated and not missing_documents:
         c.approval_status="pending"
         if not c.application_date:
             c.application_date=datetime.now(timezone.utc).isoformat(timespec="seconds")
