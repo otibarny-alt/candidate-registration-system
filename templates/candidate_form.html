@@ -38,6 +38,10 @@
 
 <div><label>Phone</label><input id="phone" name=phone readonly value="{{candidate.phone if candidate else (verified_member.phone if verified_member else '')}}"><small class="muted">Pulled from Kobo.</small></div>
 
+<div><label>Date of Birth</label><input id="date_of_birth" name=date_of_birth readonly value="{{candidate.date_of_birth if candidate else (verified_member.date_of_birth if verified_member else '')}}"><small class="muted">Pulled from the Membership Register.</small></div>
+
+<div><label>Gender</label><input id="gender" name=gender readonly value="{{candidate.gender if candidate else (verified_member.gender if verified_member else '')}}"><small class="muted">Pulled from the Membership Register.</small></div>
+
 <div><label>Email</label><input id="email" name=email type="email" {% if candidate and candidate.approval_status=='approved' %}readonly{% endif %} value="{{candidate.email if candidate else (verified_member.email if verified_member else '')}}"><small class="muted">You may update the email address before approval.</small></div>
 
 <div><label>Membership No.</label><input id="membership_no" name=membership_no readonly value="{{candidate.membership_no if candidate else (verified_member.membership_no if verified_member else '')}}"><small class="muted">Pulled from Kobo.</small></div>
@@ -303,6 +307,8 @@ const lookupBtn=document.getElementById('lookup_member_btn');
 const lookupStatus=document.getElementById('member_lookup_status');
 const fullName=document.getElementById('full_name');
 const phoneField=document.getElementById('phone');
+const dateOfBirthField=document.getElementById('date_of_birth');
+const genderField=document.getElementById('gender');
 const emailField=document.getElementById('email');
 const membershipField=document.getElementById('membership_no');
 const candidateForm=document.getElementById('candidateForm');
@@ -352,6 +358,8 @@ async function lookupMember(){
     const m=data.member||{};
     fullName.value=m.full_name||'';
     phoneField.value=m.phone||'';
+    dateOfBirthField.value=m.date_of_birth||'';
+    genderField.value=m.gender||'';
     emailField.value=m.email||'';
     membershipField.value=m.membership_no||'';
     memberVerified=true;

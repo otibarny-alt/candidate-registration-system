@@ -154,6 +154,8 @@ class Candidate(db.Model):
     full_name=db.Column(db.String(180),nullable=False)
     national_id=db.Column(db.String(40))
     phone=db.Column(db.String(40))
+    date_of_birth=db.Column(db.String(40))
+    gender=db.Column(db.String(30))
     email=db.Column(db.String(160))
     membership_no=db.Column(db.String(100))
     living_with_disability=db.Column(db.Boolean,default=False,nullable=False)
@@ -211,6 +213,10 @@ with app.app_context():
         db.session.execute(text("ALTER TABLE candidate ADD COLUMN rejection_reasons TEXT"))
     if "application_date" not in candidate_columns:
         db.session.execute(text("ALTER TABLE candidate ADD COLUMN application_date VARCHAR(40)"))
+    if "date_of_birth" not in candidate_columns:
+        db.session.execute(text("ALTER TABLE candidate ADD COLUMN date_of_birth VARCHAR(40)"))
+    if "gender" not in candidate_columns:
+        db.session.execute(text("ALTER TABLE candidate ADD COLUMN gender VARCHAR(30)"))
     if "living_with_disability" not in candidate_columns:
         db.session.execute(text("ALTER TABLE candidate ADD COLUMN living_with_disability BOOLEAN NOT NULL DEFAULT FALSE"))
     if "public_officer_recently_resigned" not in candidate_columns:
@@ -705,12 +711,26 @@ def _lookup_membership_kobo(national_id):
         "odm_membership_no",
         "membership_no"
     )
+    date_of_birth=first_value(
+        row,
+        "basics/dob","basics/date_of_birth",
+        "members_particulars/dob","members_particulars/date_of_birth",
+        "dob","date_of_birth"
+    )
+    gender=first_value(
+        row,
+        "basics/gender","basics/sex",
+        "members_particulars/gender","members_particulars/sex",
+        "gender","sex"
+    )
 
     geography=voter_geography_from_membership(row)
     return {
         "national_id": first_value(row, "basics/national_id_no", "national_id_no") or str(national_id).strip(),
         "full_name": full_name,
         "phone": phone,
+        "date_of_birth": date_of_birth,
+        "gender": gender,
         "email": email,
         "membership_no": membership_no,
         "submission_id": row.get("_id"),
@@ -772,6 +792,8 @@ def _membership_from_csv(national_id):
         "national_id":row.get("national_id_no",""),
         "full_name":" ".join(filter(None,[row.get("first_name"),row.get("middle_name"),row.get("surname")])).strip(),
         "phone":row.get("phone_no",""),
+        "date_of_birth":row.get("dob","") or row.get("date_of_birth",""),
+        "gender":row.get("gender",""),
         "email":row.get("email",""),
         "membership_no":row.get("odm_membership_no",""),
         "submission_id":"membership-csv:"+row.get("national_id_no",""),
@@ -794,7 +816,7 @@ def _membership_from_master_register(national_id):
     ) as conn:
         with conn.cursor() as cur:
             cur.execute("""SELECT national_id,party_membership_number,first_name,middle_name,
-                                  surname,full_name,phone,county,constituency,ward,
+                                  surname,full_name,phone,date_of_birth,gender,county,constituency,ward,
                                   polling_station,polling_station_code
                            FROM master_voters
                            WHERE active AND national_id=%s LIMIT 1""",(normalized,))
@@ -813,6 +835,8 @@ def _membership_from_master_register(national_id):
         "national_id":str(row.get("national_id") or normalized).strip(),
         "full_name":full_name,
         "phone":str(row.get("phone") or "").strip(),
+        "date_of_birth":str(row.get("date_of_birth") or "").strip(),
+        "gender":str(row.get("gender") or "").strip(),
         "email":"",
         "membership_no":str(row.get("party_membership_number") or "").strip(),
         "county":county,
@@ -867,6 +891,8 @@ def candidate_dict(c):
       "full_name":c.full_name,
       "national_id":c.national_id or "",
       "phone":c.phone or "",
+      "date_of_birth":c.date_of_birth or "",
+      "gender":c.gender or "",
       "email":c.email or "",
       "membership_no":c.membership_no or "",
       "living_with_disability":bool(c.living_with_disability),
@@ -888,7 +914,7 @@ def render_candidate_form_page(candidate=None, **context):
     self_service=not logged_in()
     raw_member=session.get("candidate_member",{})
     verified_member=dict(raw_member) if isinstance(raw_member,dict) else {}
-    required_member_fields=("national_id","full_name","phone","email","membership_no","county","constituency","ward","polling_station","polling_station_code")
+    required_member_fields=("national_id","full_name","phone","date_of_birth","gender","email","membership_no","county","constituency","ward","polling_station","polling_station_code")
     for field in required_member_fields:
         verified_member[field]=str(verified_member.get(field,"") or "")
     verified_member["geography_verified"]=bool(verified_member.get("geography_verified"))
@@ -996,7 +1022,7 @@ def candidate_access():
     _CANDIDATE_LOGIN_ATTEMPTS.pop(client_key,None)
     session.clear()
     session["candidate_national_id"]=national_id
-    session["candidate_member"]={k:(member.get(k,False) if k=="geography_verified" else str(member.get(k,"") or "")) for k in ("national_id","full_name","phone","email","membership_no","county","constituency","ward","polling_station","polling_station_code","geography_verified")}
+    session["candidate_member"]={k:(member.get(k,False) if k=="geography_verified" else str(member.get(k,"") or "")) for k in ("national_id","full_name","phone","date_of_birth","gender","email","membership_no","county","constituency","ward","polling_station","polling_station_code","geography_verified")}
     return redirect(url_for("candidate_home"))
 
 @app.route("/candidate/register",methods=["GET","POST"])
@@ -1029,7 +1055,7 @@ def candidate_register():
     _CANDIDATE_LOGIN_ATTEMPTS.pop(client_key,None)
     session.clear()
     session["candidate_national_id"]=national_id
-    session["candidate_member"]={k:(member.get(k,False) if k=="geography_verified" else str(member.get(k,"") or "")) for k in ("national_id","full_name","phone","email","membership_no","county","constituency","ward","polling_station","polling_station_code","geography_verified")}
+    session["candidate_member"]={k:(member.get(k,False) if k=="geography_verified" else str(member.get(k,"") or "")) for k in ("national_id","full_name","phone","date_of_birth","gender","email","membership_no","county","constituency","ward","polling_station","polling_station_code","geography_verified")}
     return redirect(url_for("candidate_new"))
 
 @app.get("/candidate/logout")
@@ -1421,6 +1447,8 @@ def save_candidate(c):
     c.full_name=member.get("full_name") or name
     c.national_id=national_id
     c.phone=member.get("phone","")
+    c.date_of_birth=member.get("date_of_birth","")
+    c.gender=member.get("gender","")
     c.email=f.get("email",member.get("email","")).strip()[:160]
     if c.email and not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+",c.email):
         return render_candidate_form_page(c,error="Enter a valid email address.")
