@@ -110,7 +110,12 @@
   <p class="muted">Upload clear PDF copies only. Each document must not exceed 5 MB.</p>
   {% for field,label in pdf_documents %}
   <div class="candidate-document-field">
-    <label for="{{field}}">{{label}}</label>
+    <label for="{{field}}">
+      {{label}}
+      {% if field=='signed_application_form' %}
+      <a class="blank-application-download" href="{{url_for('static',filename='downloads/ODM_Form_6_Editable_Nomination_Application.pdf')}}" download>Download blank application form</a>
+      {% endif %}
+    </label>
     <input type="file" id="{{field}}" name="{{field}}" accept="application/pdf,.pdf"
       {% if existing_candidate and candidate.approval_status not in ['pending','not_submitted'] and field not in rejected_document_keys %}disabled{% endif %}
       {% if not candidate or not candidate|attr(field) %}required{% endif %}>
