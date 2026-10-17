@@ -13,6 +13,7 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect, text, func
 from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.security import check_password_hash
+from pypdf import PdfReader
 from party_branding_client import register_party_branding
 
 app=Flask(__name__)
@@ -138,6 +139,7 @@ PDF_DOCUMENTS=[
  ("life_membership_certificate","Life Membership Certificate Copy"),
  ("signed_code_of_conduct","Signed Code of Conduct"),
  ("payment_receipts","Copy of Payment Receipts"),
+ ("summarized_cv","Summarized Curriculum Vitae – 2 page maximum"),
 ]
 GOVERNOR_PDF_DOCUMENT=("academic_certificate","Copy of Highest Academic Certificate")
 PLWD_PDF_DOCUMENT=("plwd_identification_card","PLWD Identification Card")
@@ -167,6 +169,7 @@ class Candidate(db.Model):
     life_membership_certificate=db.Column(db.LargeBinary)
     signed_code_of_conduct=db.Column(db.LargeBinary)
     payment_receipts=db.Column(db.LargeBinary)
+    summarized_cv=db.Column(db.LargeBinary)
     academic_certificate=db.Column(db.LargeBinary)
     plwd_identification_card=db.Column(db.LargeBinary)
     status=db.Column(db.String(20),default="active",nullable=False,index=True)
@@ -335,7 +338,7 @@ def validated_image_upload(upload, field_label, max_bytes=5*1024*1024):
         raise ValueError(f"{field_label} must be a valid JPG, PNG or WebP image.")
     return data, mime
 
-def validated_pdf_upload(upload,field_label,max_bytes=5*1024*1024):
+def validated_pdf_upload(upload,field_label,max_bytes=5*1024*1024,max_pages=None):
     """Accept only a real PDF payload, not a renamed image or executable."""
     if not upload or not str(upload.filename or "").strip():
         return None
@@ -348,6 +351,13 @@ def validated_pdf_upload(upload,field_label,max_bytes=5*1024*1024):
         raise ValueError(f"{field_label} must be a valid PDF file.")
     if b"%%EOF" not in data[-4096:]:
         raise ValueError(f"{field_label} is incomplete or damaged. Upload a complete PDF.")
+    if max_pages is not None:
+        try:
+            page_count=len(PdfReader(BytesIO(data)).pages)
+        except Exception as exc:
+            raise ValueError(f"{field_label} could not be read. Upload a valid, unencrypted PDF.") from exc
+        if page_count>max_pages:
+            raise ValueError(f"{field_label} must not exceed {max_pages} pages. The uploaded PDF has {page_count} pages.")
     return data
 
 def candidate_required_documents(c):
@@ -366,7 +376,8 @@ def save_candidate_pdf_uploads(c):
     for field,label in (*PDF_DOCUMENTS,GOVERNOR_PDF_DOCUMENT,PLWD_PDF_DOCUMENT):
         upload=request.files.get(field)
         if upload and str(upload.filename or "").strip():
-            setattr(c,field,validated_pdf_upload(upload,label))
+            max_pages=2 if field=="summarized_cv" else None
+            setattr(c,field,validated_pdf_upload(upload,label,max_pages=max_pages))
             changed=True
     return changed
 
