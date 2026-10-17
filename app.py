@@ -175,6 +175,7 @@ class Candidate(db.Model):
     status=db.Column(db.String(20),default="active",nullable=False,index=True)
     approval_status=db.Column(db.String(20),default="not_submitted",nullable=False,index=True)
     rejection_reason=db.Column(db.String(80))
+    rejection_reasons=db.Column(db.Text)
     application_date=db.Column(db.String(40),index=True)
 
 class PortalState(db.Model):
@@ -194,6 +195,8 @@ with app.app_context():
         db.session.execute(text("ALTER TABLE candidate ADD COLUMN approval_status VARCHAR(20) NOT NULL DEFAULT 'pending'"))
     if "rejection_reason" not in candidate_columns:
         db.session.execute(text("ALTER TABLE candidate ADD COLUMN rejection_reason VARCHAR(80)"))
+    if "rejection_reasons" not in candidate_columns:
+        db.session.execute(text("ALTER TABLE candidate ADD COLUMN rejection_reasons TEXT"))
     if "application_date" not in candidate_columns:
         db.session.execute(text("ALTER TABLE candidate ADD COLUMN application_date VARCHAR(40)"))
     if "living_with_disability" not in candidate_columns:
@@ -371,14 +374,35 @@ def candidate_required_documents(c):
 def candidate_missing_documents(c):
     return [label for field,label in candidate_required_documents(c) if not getattr(c,field,None)]
 
+def candidate_document_catalog(c):
+    return [
+        ("passport_photo","Passport Photo",bool(c and c.photo and c.photo_validated)),
+        *[(field,label,bool(c and getattr(c,field,None))) for field,label in candidate_required_documents(c)]
+    ]
+
+def candidate_rejection_keys(c):
+    try:
+        values=json.loads(c.rejection_reasons or "[]")
+        if isinstance(values,list):
+            return [str(value) for value in values]
+    except (TypeError,ValueError):
+        pass
+    if c.rejection_reason=="improper_candidate_picture":
+        return ["passport_photo"]
+    return []
+
+def candidate_rejection_labels(c):
+    selected=set(candidate_rejection_keys(c))
+    return [label for key,label,_present in candidate_document_catalog(c) if key in selected]
+
 def save_candidate_pdf_uploads(c):
-    changed=False
+    changed=set()
     for field,label in (*PDF_DOCUMENTS,GOVERNOR_PDF_DOCUMENT,PLWD_PDF_DOCUMENT):
         upload=request.files.get(field)
         if upload and str(upload.filename or "").strip():
             max_pages=2 if field=="summarized_cv" else None
             setattr(c,field,validated_pdf_upload(upload,label,max_pages=max_pages))
-            changed=True
+            changed.add(field)
     return changed
 
 _FACE_CASCADES=[cv2.CascadeClassifier(os.path.join(cv2.data.haarcascades,name)) for name in (
@@ -835,6 +859,8 @@ def render_candidate_form_page(candidate=None, **context):
         pdf_documents=PDF_DOCUMENTS,
         governor_pdf_document=GOVERNOR_PDF_DOCUMENT,
         plwd_pdf_document=PLWD_PDF_DOCUMENT,
+        rejection_document_keys=candidate_rejection_keys(candidate) if candidate else [],
+        rejection_document_labels=candidate_rejection_labels(candidate) if candidate else [],
         **context
     )
 
@@ -981,6 +1007,8 @@ def dashboard():
         hierarchy=hierarchy_payload(),selected_filters=selected_filters,
         pdf_documents=PDF_DOCUMENTS,governor_pdf_document=GOVERNOR_PDF_DOCUMENT,
         plwd_pdf_document=PLWD_PDF_DOCUMENT,
+        candidate_rejection_keys=candidate_rejection_keys,
+        candidate_rejection_labels=candidate_rejection_labels,
         csrf_token=admin_csrf_token(),level2_configured=bool(LEVEL2_ADMIN_USERNAME and LEVEL2_ADMIN_PASSWORD_HASH),
         message=session.pop("candidate_admin_message",None),
         error=session.pop("candidate_admin_error",None)
@@ -1045,7 +1073,6 @@ def candidate_decision(candidate_id):
         return return_to_filtered_dashboard()
     c=Candidate.query.get_or_404(candidate_id)
     decision=request.form.get("approval_status","").strip().lower()
-    rejection_reason=request.form.get("rejection_reason","").strip().lower()
     if decision not in {"pending","approved","rejected"}:
         abort(400)
     if decision=="approved" and (not c.photo or not c.photo_validated):
@@ -1055,16 +1082,25 @@ def candidate_decision(candidate_id):
     if decision=="approved" and missing_documents:
         session["candidate_admin_error"]="This application cannot be Accepted until these PDF documents are attached: "+", ".join(missing_documents)+"."
         return return_to_filtered_dashboard()
-    if decision=="rejected" and rejection_reason!="improper_candidate_picture":
-        session["candidate_admin_error"]="Select Invalid passport photo before rejecting the application."
+    catalog=candidate_document_catalog(c)
+    allowed_rejection_keys={key for key,_label,_present in catalog}
+    selected_rejection_keys={
+        key for key in request.form.getlist("rejection_documents")
+        if key in allowed_rejection_keys
+    }
+    selected_rejection_keys.update(key for key,_label,present in catalog if not present)
+    if decision=="rejected" and not selected_rejection_keys:
+        session["candidate_admin_error"]="Select at least one missing or unacceptable document before rejecting the application."
         return return_to_filtered_dashboard()
     if candidate_list_is_final():
         session["candidate_admin_error"]="The candidate list became FINAL. The application decision was not changed."
         return return_to_filtered_dashboard()
     previous_decision=c.approval_status
     previous_rejection_reason=c.rejection_reason
+    previous_rejection_reasons=c.rejection_reasons
     c.approval_status=decision
-    c.rejection_reason=rejection_reason if decision=="rejected" else None
+    c.rejection_reason="document_review" if decision=="rejected" else None
+    c.rejection_reasons=json.dumps(sorted(selected_rejection_keys)) if decision=="rejected" else None
     db.session.commit()
     if decision=="approved":
         try:
@@ -1072,6 +1108,7 @@ def candidate_decision(candidate_id):
         except Exception as exc:
             c.approval_status=previous_decision
             c.rejection_reason=previous_rejection_reason
+            c.rejection_reasons=previous_rejection_reasons
             db.session.commit()
             session["candidate_admin_error"]="Candidate approval was not saved because the voters register could not be updated: "+str(exc)
             return return_to_filtered_dashboard()
@@ -1218,7 +1255,10 @@ def save_candidate(c):
         if c.approval_status!="rejected":
             return render_candidate_form_page(c,error="This application is not open for editing."),423
 
-        if c.rejection_reason=="improper_candidate_picture":
+        rejection_keys=set(candidate_rejection_keys(c))
+        if not rejection_keys:
+            return render_candidate_form_page(c,error="The administrator must select the rejected documents before a correction can be submitted."),423
+        if "passport_photo" in rejection_keys:
             cropped_photo=request.form.get("cropped_photo","").strip()
             if not cropped_photo:
                 return render_candidate_form_page(c,error="Select, crop and confirm a fresh passport photo before resubmitting this rejected application.")
@@ -1227,14 +1267,22 @@ def save_candidate(c):
                 c.photo_validated=True
             except (ValueError,RuntimeError) as exc:
                 return render_candidate_form_page(c,error=str(exc))
-        else:
-            return render_candidate_form_page(c,error="The administrator must record a valid rejection reason before a correction can be submitted."),423
+        try:
+            uploaded_documents=save_candidate_pdf_uploads(c)
+        except ValueError as exc:
+            return render_candidate_form_page(c,error=str(exc))
+        required_replacements=rejection_keys-{"passport_photo"}
+        not_replaced=required_replacements-set(uploaded_documents)
+        if not_replaced:
+            labels=dict((key,label) for key,label,_present in candidate_document_catalog(c))
+            return render_candidate_form_page(c,error="Upload fresh PDF replacements for: "+", ".join(labels.get(key,key) for key in sorted(not_replaced))+".")
 
         if candidate_list_is_final():
             db.session.rollback()
             return render_candidate_form_page(c,error="The candidate list became FINAL while this correction was open. Your document was not saved."),423
         c.approval_status="pending"
         c.rejection_reason=None
+        c.rejection_reasons=None
         db.session.commit()
         return redirect(url_for("candidate_edit",candidate_id=c.id,saved=1))
 

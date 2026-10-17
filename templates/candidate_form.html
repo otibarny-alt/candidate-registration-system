@@ -1,11 +1,13 @@
 <!doctype html><link rel=stylesheet href=/static/style.css><meta name=viewport content="width=device-width,initial-scale=1">
 {% set existing_candidate = self_service and candidate %}
 {% set pending_document_edit = existing_candidate and (candidate.approval_status or 'not_submitted') in ['pending','not_submitted'] %}
-{% set correction_photo = existing_candidate and candidate.approval_status=='rejected' and candidate.rejection_reason=='improper_candidate_picture' %}
+{% set rejected_document_keys = rejection_document_keys or [] %}
+{% set correction_documents = existing_candidate and candidate.approval_status=='rejected' and rejected_document_keys %}
+{% set correction_photo = existing_candidate and candidate.approval_status=='rejected' and 'passport_photo' in rejected_document_keys %}
 <div class=wrap><div class=card><img class="candidate-portal-banner" src="{{ party_brand.header_url or url_for('static', filename='odm_orange_voting_banner.png') }}" alt="{{ party_brand.abbreviation }} 2027 Party Primaries Voting System">{% if self_service %}<nav class="portal-card-nav"><a href=/candidate/logout>Candidate Logout</a></nav>{% endif %}<div class="candidate-form-heading"><h2>{{"Edit Candidate" if candidate else "Register Candidate"}}</h2>{% if not candidate %}<a class="btn status-login-link" href="{{url_for('candidate_access')}}">Already registered? View Status / Edit Application</a>{% endif %}</div>
 {% if self_service %}<div class="privacy-notice"><b>Private application:</b> You are viewing only your own candidate information.</div>{% endif %}
 {% if list_locked %}<div class="central-lock central-lock-final"><h3>🔒 FINAL CANDIDATE LIST — EDITING LOCKED</h3><p>This application is available for viewing only. No changes can be saved unless a Level 2 administrator unlocks the candidate list.</p></div>{% endif %}
-{% if self_service and candidate %}<div class="decision-notice decision-{{candidate.approval_status or 'not_submitted'}}"><b>Application status:</b> {% if candidate.approval_status=='approved' %}ACCEPTED{% elif candidate.approval_status=='rejected' %}REJECTED{% elif candidate.approval_status=='pending' %}PENDING APPROVAL{% else %}NOT SUBMITTED{% endif %}{% if candidate.approval_status == 'not_submitted' %} — the application has not been sent for administrator review. Upload a passport photo that passes validation to submit it.{% elif candidate.approval_status == 'pending' %} — your application is awaiting administrator review. The passport photo may be replaced; all other fields are locked.{% elif candidate.approval_status == 'approved' %} — your application is accepted for inclusion on the ballot. All fields are locked.{% else %} — your application is not included on the ballot.<br><b>Reason for rejection:</b> {% if candidate.rejection_reason=='improper_candidate_picture' %}Invalid passport photo. Only the passport photo is open for correction.{% else %}Contact the candidate registration administrator. No field is open until a valid reason is recorded{% endif %}.{% endif %}</div>{% endif %}
+{% if self_service and candidate %}<div class="decision-notice decision-{{candidate.approval_status or 'not_submitted'}}"><b>Application status:</b> {% if candidate.approval_status=='approved' %}ACCEPTED{% elif candidate.approval_status=='rejected' %}REJECTED{% elif candidate.approval_status=='pending' %}PENDING APPROVAL{% else %}NOT SUBMITTED{% endif %}{% if candidate.approval_status == 'not_submitted' %} — the application has not been sent for administrator review. Complete all required documents to submit it.{% elif candidate.approval_status == 'pending' %} — your application is awaiting administrator review. Submitted documents may be replaced while review is pending; all personal and electoral fields are locked.{% elif candidate.approval_status == 'approved' %} — your application is accepted for inclusion on the ballot. All fields are locked.{% else %} — your application is not included on the ballot.<br><b>Documents requiring correction:</b>{% if rejection_document_labels %}<ul class="candidate-rejection-list">{% for label in rejection_document_labels %}<li>{{label}}</li>{% endfor %}</ul><span>Only the documents listed above are open for replacement.</span>{% else %} Contact the candidate registration administrator because no document reason was recorded.{% endif %}{% endif %}</div>{% endif %}
 {% if self_service and verified_member.geography_verified %}<div class="eligibility-notice"><b>Your verified voter area:</b> {{verified_member.county|replace('_',' ')|title}} · {{verified_member.constituency|replace('_',' ')|title}} · {{verified_member.ward|replace('_',' ')|title}}{% if verified_member.polling_station %}<br><b>Polling station:</b> {{verified_member.polling_station|replace('_',' ')|title}}{% endif %}<br><span>Governor, Senator and Woman Representative applications are restricted to this county; MNA to this constituency; and MCA to this ward. President is national.</span></div>{% elif self_service %}<div class="error">Your voter area could not be refreshed. Please log out and sign in again before editing a non-presidential application.</div>{% endif %}
 {% if saved %}<div class="success">Your candidate application documents have been saved successfully.</div>{% endif %}
 {% if error %}<div class=error>{{error}}</div>{% endif %}
@@ -45,7 +47,7 @@
 {% set plwd_field=plwd_pdf_document[0] %}
 <label for="{{plwd_field}}">{{plwd_pdf_document[1]}} (PDF)</label>
 <input type="file" id="{{plwd_field}}" name="{{plwd_field}}" accept="application/pdf,.pdf"
-  {% if existing_candidate and candidate.approval_status not in ['pending','not_submitted'] %}disabled{% endif %}
+  {% if existing_candidate and candidate.approval_status not in ['pending','not_submitted'] and plwd_field not in rejected_document_keys %}disabled{% endif %}
   {% if candidate and candidate.living_with_disability and not candidate|attr(plwd_field) %}required{% endif %}>
 {% if candidate and candidate|attr(plwd_field) %}
 <a class="document-view-link" target="_blank" rel="noopener" href="{{url_for('candidate_document',candidate_id=candidate.id,document_key=plwd_field)}}">View saved PDF</a>
@@ -110,7 +112,7 @@
   <div class="candidate-document-field">
     <label for="{{field}}">{{label}}</label>
     <input type="file" id="{{field}}" name="{{field}}" accept="application/pdf,.pdf"
-      {% if existing_candidate and candidate.approval_status not in ['pending','not_submitted'] %}disabled{% endif %}
+      {% if existing_candidate and candidate.approval_status not in ['pending','not_submitted'] and field not in rejected_document_keys %}disabled{% endif %}
       {% if not candidate or not candidate|attr(field) %}required{% endif %}>
     {% if candidate and candidate|attr(field) %}
     <a class="document-view-link" target="_blank" rel="noopener" href="{{url_for('candidate_document',candidate_id=candidate.id,document_key=field)}}">View saved PDF</a>
@@ -122,7 +124,7 @@
   <div class="candidate-document-field" id="governorAcademicDocument">
     <label for="{{academic_field}}">{{academic_label}}</label>
     <input type="file" id="{{academic_field}}" name="{{academic_field}}" accept="application/pdf,.pdf"
-      {% if existing_candidate and candidate.approval_status not in ['pending','not_submitted'] %}disabled{% endif %}
+      {% if existing_candidate and candidate.approval_status not in ['pending','not_submitted'] and academic_field not in rejected_document_keys %}disabled{% endif %}
       {% if (not candidate or not candidate|attr(academic_field)) and ((candidate and candidate.position=='governor') or not candidate) %}required{% endif %}>
     {% if candidate and candidate|attr(academic_field) %}
     <a class="document-view-link" target="_blank" rel="noopener" href="{{url_for('candidate_document',candidate_id=candidate.id,document_key=academic_field)}}">View saved PDF</a>
@@ -131,7 +133,7 @@
 </div>
 <label>Short Biography</label><textarea name=bio rows=7 placeholder="Candidate biography, experience, priorities, etc." {% if existing_candidate %}disabled{% endif %}>{{candidate.bio if candidate else ''}}</textarea>
 {% if not list_locked %}<div class="form-actions">
-  {% if not existing_candidate %}<button type="submit">Validate Passport Photo &amp; Submit Application</button>{% elif candidate.approval_status=='not_submitted' %}<button type="submit">Validate Passport Photo &amp; Submit Application</button>{% elif pending_document_edit %}<button type="submit">Save Passport Photo Change</button>{% elif correction_photo %}<button type="submit">Submit Corrected Passport Photo</button>{% else %}<span class="view-only-message">No fields are open for editing.</span>{% endif %}
+  {% if not existing_candidate %}<button type="submit">Validate Passport Photo &amp; Submit Application</button>{% elif candidate.approval_status=='not_submitted' %}<button type="submit">Validate Passport Photo &amp; Submit Application</button>{% elif pending_document_edit %}<button type="submit">Save Document Changes</button>{% elif correction_documents %}<button type="submit">Submit Corrected Documents</button>{% else %}<span class="view-only-message">No fields are open for editing.</span>{% endif %}
   <a class="btn cancel-edit-btn" href="{{ url_for('candidate_home') if self_service else url_for('dashboard') }}">Cancel Edit</a>
 </div>{% endif %}
 </fieldset></form></div></div>
