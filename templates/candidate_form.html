@@ -35,6 +35,25 @@
 
 <div><label>Membership No.</label><input id="membership_no" name=membership_no readonly value="{{candidate.membership_no if candidate else (verified_member.membership_no if verified_member else '')}}"><small class="muted">Pulled from Kobo.</small></div>
 
+<div class="plwd-question-field"><label for="living_with_disability">Are you a Person Living with Disability?</label>
+<select name="living_with_disability" id="living_with_disability" required {% if existing_candidate %}disabled{% endif %}>
+<option value="">Select YES or NO</option>
+<option value="yes" {% if candidate and candidate.living_with_disability %}selected{% endif %}>YES</option>
+<option value="no" {% if candidate and not candidate.living_with_disability %}selected{% endif %}>NO</option>
+</select>
+<div class="candidate-document-field" id="plwdIdentificationDocument">
+{% set plwd_field=plwd_pdf_document[0] %}
+<label for="{{plwd_field}}">{{plwd_pdf_document[1]}} (PDF)</label>
+<input type="file" id="{{plwd_field}}" name="{{plwd_field}}" accept="application/pdf,.pdf"
+  {% if existing_candidate and candidate.approval_status not in ['pending','not_submitted'] %}disabled{% endif %}
+  {% if candidate and candidate.living_with_disability and not candidate|attr(plwd_field) %}required{% endif %}>
+{% if candidate and candidate|attr(plwd_field) %}
+<a class="document-view-link" target="_blank" rel="noopener" href="{{url_for('candidate_document',candidate_id=candidate.id,document_key=plwd_field)}}">View saved PDF</a>
+{% endif %}
+<small class="muted">Required only when the answer is YES. Maximum file size: 5 MB.</small>
+</div>
+</div>
+
 <div><label>Position Applied For</label>
 <select name=position id=position required {% if existing_candidate %}disabled{% endif %}>
 <option value="">Select position</option>
@@ -120,6 +139,7 @@
 <script>
 let H=null;
 const county=document.getElementById('county'), constituency=document.getElementById('constituency'), ward=document.getElementById('ward'), position=document.getElementById('position');
+const plwdAnswer=document.getElementById('living_with_disability'), plwdDocument=document.getElementById('plwdIdentificationDocument'), plwdInput=document.getElementById('plwd_identification_card');
 const selfService={{'true' if self_service else 'false'}};
 const eligible={county:{{(verified_member.county if verified_member else '')|tojson}},constituency:{{(verified_member.constituency if verified_member else '')|tojson}},ward:{{(verified_member.ward if verified_member else '')|tojson}}};
 const current={county:{{((verified_member.county if verified_member else '') if self_service else (candidate.county if candidate else ''))|tojson}},constituency:{{((verified_member.constituency if verified_member else '') if self_service else (candidate.constituency if candidate else ''))|tojson}},ward:{{((verified_member.ward if verified_member else '') if self_service else (candidate.ward if candidate else ''))|tojson}}};
@@ -138,8 +158,12 @@ function applyScope(){
  const isGovernor=position.value==='governor';
  governorDocument.style.display=isGovernor?'block':'none';
  academicInput.required=isGovernor && !governorDocument.querySelector('.document-view-link');
+ const isPlwd=plwdAnswer.value==='yes';
+ plwdDocument.style.display=isPlwd?'block':'none';
+ plwdInput.required=isPlwd && !plwdDocument.querySelector('.document-view-link');
 }
 position.onchange=applyScope;
+plwdAnswer.onchange=applyScope;
 county.onchange=()=>{
  fill(constituency,H.constituencies.filter(x=>norm(x.county_key)==norm(county.value)),'Select Constituency','');
  fill(ward,[],'Select Ward','');

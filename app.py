@@ -140,6 +140,7 @@ PDF_DOCUMENTS=[
  ("payment_receipts","Copy of Payment Receipts"),
 ]
 GOVERNOR_PDF_DOCUMENT=("academic_certificate","Copy of Highest Academic Certificate")
+PLWD_PDF_DOCUMENT=("plwd_identification_card","PLWD Identification Card")
 
 class Candidate(db.Model):
     id=db.Column(db.Integer,primary_key=True)
@@ -149,6 +150,7 @@ class Candidate(db.Model):
     phone=db.Column(db.String(40))
     email=db.Column(db.String(160))
     membership_no=db.Column(db.String(100))
+    living_with_disability=db.Column(db.Boolean,default=False,nullable=False)
     position=db.Column(db.String(40),nullable=False,index=True)
     county=db.Column(db.String(160),index=True)
     constituency=db.Column(db.String(160),index=True)
@@ -166,6 +168,7 @@ class Candidate(db.Model):
     signed_code_of_conduct=db.Column(db.LargeBinary)
     payment_receipts=db.Column(db.LargeBinary)
     academic_certificate=db.Column(db.LargeBinary)
+    plwd_identification_card=db.Column(db.LargeBinary)
     status=db.Column(db.String(20),default="active",nullable=False,index=True)
     approval_status=db.Column(db.String(20),default="not_submitted",nullable=False,index=True)
     rejection_reason=db.Column(db.String(80))
@@ -190,7 +193,9 @@ with app.app_context():
         db.session.execute(text("ALTER TABLE candidate ADD COLUMN rejection_reason VARCHAR(80)"))
     if "application_date" not in candidate_columns:
         db.session.execute(text("ALTER TABLE candidate ADD COLUMN application_date VARCHAR(40)"))
-    for document_column,_document_label in (*PDF_DOCUMENTS,GOVERNOR_PDF_DOCUMENT):
+    if "living_with_disability" not in candidate_columns:
+        db.session.execute(text("ALTER TABLE candidate ADD COLUMN living_with_disability BOOLEAN NOT NULL DEFAULT FALSE"))
+    for document_column,_document_label in (*PDF_DOCUMENTS,GOVERNOR_PDF_DOCUMENT,PLWD_PDF_DOCUMENT):
         if document_column not in candidate_columns:
             db.session.execute(text(f"ALTER TABLE candidate ADD COLUMN {document_column} BYTEA"))
     if db.session.get(PortalState,1) is None:
@@ -349,6 +354,8 @@ def candidate_required_documents(c):
     documents=list(PDF_DOCUMENTS)
     if c and c.position=="governor":
         documents.append(GOVERNOR_PDF_DOCUMENT)
+    if c and c.living_with_disability:
+        documents.append(PLWD_PDF_DOCUMENT)
     return documents
 
 def candidate_missing_documents(c):
@@ -356,7 +363,7 @@ def candidate_missing_documents(c):
 
 def save_candidate_pdf_uploads(c):
     changed=False
-    for field,label in (*PDF_DOCUMENTS,GOVERNOR_PDF_DOCUMENT):
+    for field,label in (*PDF_DOCUMENTS,GOVERNOR_PDF_DOCUMENT,PLWD_PDF_DOCUMENT):
         upload=request.files.get(field)
         if upload and str(upload.filename or "").strip():
             setattr(c,field,validated_pdf_upload(upload,label))
@@ -768,6 +775,7 @@ def candidate_dict(c):
       "phone":c.phone or "",
       "email":c.email or "",
       "membership_no":c.membership_no or "",
+      "living_with_disability":bool(c.living_with_disability),
       "position":c.position,
       "county":c.county or "",
       "constituency":c.constituency or "",
@@ -815,6 +823,7 @@ def render_candidate_form_page(candidate=None, **context):
         list_locked=candidate_list_is_final(),
         pdf_documents=PDF_DOCUMENTS,
         governor_pdf_document=GOVERNOR_PDF_DOCUMENT,
+        plwd_pdf_document=PLWD_PDF_DOCUMENT,
         **context
     )
 
@@ -960,6 +969,7 @@ def dashboard():
         "dashboard.html",candidates=candidates,positions=POSITIONS,state=state,
         hierarchy=hierarchy_payload(),selected_filters=selected_filters,
         pdf_documents=PDF_DOCUMENTS,governor_pdf_document=GOVERNOR_PDF_DOCUMENT,
+        plwd_pdf_document=PLWD_PDF_DOCUMENT,
         csrf_token=admin_csrf_token(),level2_configured=bool(LEVEL2_ADMIN_USERNAME and LEVEL2_ADMIN_PASSWORD_HASH),
         message=session.pop("candidate_admin_message",None),
         error=session.pop("candidate_admin_error",None)
@@ -1276,6 +1286,10 @@ def save_candidate(c):
     c.phone=member.get("phone","")
     c.email=member.get("email","")
     c.membership_no=member.get("membership_no","")
+    disability_answer=f.get("living_with_disability","").strip().lower()
+    if disability_answer not in {"yes","no"}:
+        return render_candidate_form_page(c,error="Select YES or NO for Are you a Person Living with Disability?")
+    c.living_with_disability=disability_answer=="yes"
     c.position=position
     c.bio=f.get("bio","").strip()
     c.status=(f.get("status","active").strip() or "active") if logged_in() else "active"
@@ -1362,7 +1376,7 @@ def candidate_document(candidate_id,document_key):
     c=Candidate.query.get_or_404(candidate_id)
     if not candidate_can_access(c):
         abort(403)
-    allowed=dict((*PDF_DOCUMENTS,GOVERNOR_PDF_DOCUMENT))
+    allowed=dict((*PDF_DOCUMENTS,GOVERNOR_PDF_DOCUMENT,PLWD_PDF_DOCUMENT))
     if document_key not in allowed:
         abort(404)
     data=getattr(c,document_key,None)
