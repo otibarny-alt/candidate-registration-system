@@ -115,6 +115,9 @@
       {% if field=='signed_application_form' %}
       <a class="blank-application-download" href="{{url_for('static',filename='downloads/ODM_Form_6_Editable_Nomination_Application.pdf')}}" download>Download blank application form</a>
       {% endif %}
+      {% if field=='signed_code_of_conduct' %}
+      <a class="blank-application-download" href="{{url_for('static',filename='downloads/ODM_Blank_Code_of_Conduct.pdf')}}" download>Download blank Code of Conduct</a>
+      {% endif %}
     </label>
     <input type="file" id="{{field}}" name="{{field}}" accept="application/pdf,.pdf"
       {% if existing_candidate and candidate.approval_status not in ['pending','not_submitted'] and field not in rejected_document_keys %}disabled{% endif %}
