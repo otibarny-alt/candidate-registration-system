@@ -56,6 +56,25 @@
 </div>
 </div>
 
+<div class="public-officer-question-field"><label for="public_officer_recently_resigned">Are you a Public Officer who has recently Resigned?</label>
+<select name="public_officer_recently_resigned" id="public_officer_recently_resigned" required {% if existing_candidate %}disabled{% endif %}>
+<option value="">Select YES or NO</option>
+<option value="yes" {% if candidate and candidate.public_officer_recently_resigned %}selected{% endif %}>YES</option>
+<option value="no" {% if candidate and not candidate.public_officer_recently_resigned %}selected{% endif %}>NO</option>
+</select>
+<div class="candidate-document-field" id="publicOfficerResignationDocument">
+{% set resignation_field=public_officer_pdf_document[0] %}
+<label for="{{resignation_field}}">{{public_officer_pdf_document[1]}} (PDF)</label>
+<input type="file" id="{{resignation_field}}" name="{{resignation_field}}" accept="application/pdf,.pdf"
+  {% if existing_candidate and candidate.approval_status not in ['pending','not_submitted'] and resignation_field not in rejected_document_keys %}disabled{% endif %}
+  {% if candidate and candidate.public_officer_recently_resigned and not candidate|attr(resignation_field) %}required{% endif %}>
+{% if candidate and candidate|attr(resignation_field) %}
+<a class="document-view-link" target="_blank" rel="noopener" href="{{url_for('candidate_document',candidate_id=candidate.id,document_key=resignation_field)}}">View saved PDF</a>
+{% endif %}
+<small class="muted">Required only when the answer is YES. Maximum file size: 5 MB.</small>
+</div>
+</div>
+
 <div><label>Position Applied For</label>
 <select name=position id=position required {% if existing_candidate %}disabled{% endif %}>
 <option value="">Select position</option>
@@ -150,6 +169,7 @@
 let H=null;
 const county=document.getElementById('county'), constituency=document.getElementById('constituency'), ward=document.getElementById('ward'), position=document.getElementById('position');
 const plwdAnswer=document.getElementById('living_with_disability'), plwdDocument=document.getElementById('plwdIdentificationDocument'), plwdInput=document.getElementById('plwd_identification_card');
+const publicOfficerAnswer=document.getElementById('public_officer_recently_resigned'), resignationDocument=document.getElementById('publicOfficerResignationDocument'), resignationInput=document.getElementById('acknowledged_resignation_letter');
 const selfService={{'true' if self_service else 'false'}};
 const eligible={county:{{(verified_member.county if verified_member else '')|tojson}},constituency:{{(verified_member.constituency if verified_member else '')|tojson}},ward:{{(verified_member.ward if verified_member else '')|tojson}}};
 const current={county:{{((verified_member.county if verified_member else '') if self_service else (candidate.county if candidate else ''))|tojson}},constituency:{{((verified_member.constituency if verified_member else '') if self_service else (candidate.constituency if candidate else ''))|tojson}},ward:{{((verified_member.ward if verified_member else '') if self_service else (candidate.ward if candidate else ''))|tojson}}};
@@ -171,9 +191,13 @@ function applyScope(){
  const isPlwd=plwdAnswer.value==='yes';
  plwdDocument.style.display=isPlwd?'block':'none';
  plwdInput.required=isPlwd && !plwdDocument.querySelector('.document-view-link');
+ const hasResigned=publicOfficerAnswer.value==='yes';
+ resignationDocument.style.display=hasResigned?'block':'none';
+ resignationInput.required=hasResigned && !resignationDocument.querySelector('.document-view-link');
 }
 position.onchange=applyScope;
 plwdAnswer.onchange=applyScope;
+publicOfficerAnswer.onchange=applyScope;
 county.onchange=()=>{
  fill(constituency,H.constituencies.filter(x=>norm(x.county_key)==norm(county.value)),'Select Constituency','');
  fill(ward,[],'Select Ward','');
