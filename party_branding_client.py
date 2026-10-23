@@ -62,7 +62,7 @@ def get_brand(force=False):
                     "header_url": str(data.get("header_url") or remote.get("header_url") or ""),
                 }
                 if str(value.get("code", "")).upper() == "UDA" and not value["header_url"]:
-                    value["header_url"] = "/static/brand_uda_header.png"
+                    value["header_url"] = "/static/brand_uda_header.png?v=fd4ae5a0-v172"
             except Exception as exc:
                 error = str(exc)
         else:
@@ -93,12 +93,12 @@ def get_brand(force=False):
                             "code": "UDA",
                             "name": "United Democratic Alliance",
                             "abbreviation": "UDA",
-                            "slogan": "Kazi ni Kazi",
+                            "slogan": "Usawa Ni Sawa",
                             "membership_prefix": "UDA",
                             "primary": "#11833b",
                             "secondary": "#ffd400",
                             "accent": "#ffffff",
-                            "header_url": "/static/brand_uda_header.png",
+                            "header_url": "/static/brand_uda_header.png?v=fd4ae5a0-v172",
                         }
                     else:
                         value = dict(DEFAULT)
@@ -135,7 +135,7 @@ def register_party_branding(app):
             html = response.get_data(as_text=True)
             header = brand.get("header_url", "")
             if not header and str(brand.get("code", "")).upper() == "UDA":
-                header = "/static/brand_uda_header.png"
+                header = "/static/brand_uda_header.png?v=fd4ae5a0-v172"
                 brand["header_url"] = header
             if header:
                 # Only named system-brand images are replaced. Candidate photos are untouched.
@@ -144,15 +144,6 @@ def register_party_branding(app):
                     header,
                     html,
                 )
-            replacements = {
-                "Orange Democratic Movement": brand["name"],
-                "ODM 2027": brand["abbreviation"] + " 2027",
-                "ODM Membership": brand["abbreviation"] + " Membership",
-                "ODM membership": brand["abbreviation"] + " membership",
-                "ODM Registration": brand["abbreviation"] + " Registration",
-                "ODM registration": brand["abbreviation"] + " registration",
-                "Tuko Tayari": brand["slogan"],
-            }
             polling_script = """
 <script id="party-brand-live-refresh">
 (()=>{
@@ -176,8 +167,7 @@ def register_party_branding(app):
                 '<style id="party-brand-theme">:root{--party-primary:' + brand["primary"]
                 + ';--party-secondary:' + brand["secondary"] + ';--party-accent:' + brand["accent"]
                 + '}button,.btn,.button{border-color:var(--party-primary)!important}</style>'
-                + '<script id="party-brand-text">document.addEventListener(\'DOMContentLoaded\',()=>{const r=' + json.dumps(replacements)
-                + ";const w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let n;while(n=w.nextNode()){if(['SCRIPT','STYLE','TEXTAREA','OPTION'].includes(n.parentElement?.tagName))continue;let v=n.nodeValue;for(const [a,z] of Object.entries(r))v=v.split(a).join(z);n.nodeValue=v}});</script>"
+                + "<script id=\"party-brand-text\">(()=>{const clean=v=>v.replace(/Orange Democratic Movement/gi,'Party').replace(/\\bODM\\b/gi,'Party');const apply=()=>{document.title=clean(document.title);const w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let n;while(n=w.nextNode()){if(['SCRIPT','STYLE','TEXTAREA','OPTION'].includes(n.parentElement?.tagName))continue;n.nodeValue=clean(n.nodeValue)}};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',apply);else apply();})();</script>"
                 + polling_script
             )
             html = html.replace("</head>", addon + "</head>")

@@ -2,7 +2,7 @@
 <div class=wrap><div class="card narrow">
 <img class="candidate-portal-banner" src="{{ party_brand.header_url or url_for('static', filename='odm_orange_voting_banner.png') }}" alt="{{ party_brand.abbreviation }} 2027 Party Primaries Voting System">
 <nav class="portal-card-nav"><a href="{{url_for('main_navigation_dashboard')}}">Main Dashboard</a><a href="{{url_for('candidate_access')}}">View Application Status</a></nav>
-<h1>Start a New Candidate Application</h1>
+<h1>Start a New {{ party_brand.abbreviation }} Candidate Application</h1>
 <p>Enter your National ID and the phone number registered in Party Membership Registration. After your identity is confirmed, the new application form will open.</p>
 {% if error %}<div class=error>{{error}}</div>{% endif %}
 <form method=post autocomplete=off>
@@ -10,6 +10,6 @@
 <label>Registered Phone Number</label><input id=registered_phone name=phone type=tel inputmode=tel autocomplete=off autocapitalize=off spellcheck=false data-lpignore=true data-1p-ignore required>
 <button>Verify and Start Registration</button>
 </form>
-<p class=muted>Only verified Party members without an existing candidate application can start a new registration.</p>
+<p class=muted>Only verified Party members without an existing {{ party_brand.abbreviation }} candidate application can start a new registration. ODM and UDA applications are stored separately.</p>
 </div></div>
 <script>window.addEventListener('pageshow',()=>{const phone=document.getElementById('registered_phone');if(phone)phone.value='';});</script>

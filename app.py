@@ -14,7 +14,7 @@ from sqlalchemy import inspect, text, func
 from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.security import check_password_hash
 from pypdf import PdfReader
-from party_branding_client import register_party_branding
+from party_branding_client import get_brand, register_party_branding
 
 app=Flask(__name__)
 app.secret_key=os.getenv("FLASK_SECRET_KEY","candidate-portal-change-me")
@@ -151,6 +151,7 @@ CHAPTER_SIX_APPEAL_PDF_DOCUMENT=("chapter_six_appeal_review_evidence","Chapter S
 class Candidate(db.Model):
     id=db.Column(db.Integer,primary_key=True)
     candidate_id=db.Column(db.String(80),unique=True,nullable=False,index=True)
+    party_code=db.Column(db.String(10),nullable=False,default="ODM",index=True)
     full_name=db.Column(db.String(180),nullable=False)
     national_id=db.Column(db.String(40))
     phone=db.Column(db.String(40))
@@ -194,6 +195,7 @@ class Candidate(db.Model):
 
 class PortalState(db.Model):
     id=db.Column(db.Integer,primary_key=True)
+    party_code=db.Column(db.String(10),nullable=False,default="ODM",index=True)
     candidate_list_final=db.Column(db.Boolean,default=False,nullable=False)
     locked_at=db.Column(db.String(40))
     locked_by=db.Column(db.String(100))
@@ -203,6 +205,11 @@ with app.app_context():
     # create_all() does not add columns to an existing Render PostgreSQL table.
     # Apply this small, backwards-compatible migration during deployment.
     candidate_columns={column["name"] for column in inspect(db.engine).get_columns("candidate")}
+    if "party_code" not in candidate_columns:
+        db.session.execute(text("ALTER TABLE candidate ADD COLUMN party_code VARCHAR(10) NOT NULL DEFAULT 'ODM'"))
+    db.session.execute(text("UPDATE candidate SET party_code='ODM' WHERE party_code IS NULL OR party_code=''"))
+    db.session.execute(text("CREATE INDEX IF NOT EXISTS idx_candidate_party_code ON candidate (party_code)"))
+    db.session.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_candidate_party_national_id ON candidate (party_code,national_id) WHERE national_id IS NOT NULL AND national_id<>''"))
     if "photo_validated" not in candidate_columns:
         db.session.execute(text("ALTER TABLE candidate ADD COLUMN photo_validated BOOLEAN NOT NULL DEFAULT FALSE"))
     if "approval_status" not in candidate_columns:
@@ -230,8 +237,14 @@ with app.app_context():
     for document_column,_document_label in (*PDF_DOCUMENTS,GOVERNOR_PDF_DOCUMENT,PLWD_PDF_DOCUMENT,PUBLIC_OFFICER_PDF_DOCUMENT,BANKRUPTCY_PDF_DOCUMENT,APPEAL_REVIEW_PDF_DOCUMENT,CHAPTER_SIX_APPEAL_PDF_DOCUMENT):
         if document_column not in candidate_columns:
             db.session.execute(text(f"ALTER TABLE candidate ADD COLUMN {document_column} BYTEA"))
+    portal_state_columns={column["name"] for column in inspect(db.engine).get_columns("portal_state")}
+    if "party_code" not in portal_state_columns:
+        db.session.execute(text("ALTER TABLE portal_state ADD COLUMN party_code VARCHAR(10) NOT NULL DEFAULT 'ODM'"))
+    db.session.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_portal_state_party_code ON portal_state (party_code)"))
     if db.session.get(PortalState,1) is None:
-        db.session.add(PortalState(id=1,candidate_list_final=False))
+        db.session.add(PortalState(id=1,party_code="ODM",candidate_list_final=False))
+    else:
+        db.session.execute(text("UPDATE portal_state SET party_code='ODM' WHERE id=1 AND (party_code IS NULL OR party_code='')"))
     # Older incomplete records must be reviewed again and cannot remain accepted.
     db.session.execute(text(
         "UPDATE candidate SET approval_status='pending' "
@@ -255,6 +268,27 @@ def logged_in():
 
 def candidate_logged_in():
     return bool(session.get("candidate_national_id"))
+
+def normalized_party_code(value=None):
+    code=str(value or "").strip().upper()
+    return code if code in {"ODM","UDA"} else "ODM"
+
+def active_candidate_party_code():
+    return normalized_party_code((get_brand() or {}).get("code"))
+
+def candidate_session_party_code():
+    return normalized_party_code(session.get("candidate_party_code") or active_candidate_party_code())
+
+@app.before_request
+def prevent_cross_party_candidate_session():
+    """Never show one party's application under the other party's branding."""
+    if (candidate_logged_in() and not logged_in() and
+        request.path.startswith("/candidate") and
+        request.endpoint not in {"candidate_logout","candidate_access","candidate_register"} and
+        candidate_session_party_code()!=active_candidate_party_code()):
+        session.clear()
+        session["candidate_entry_message"]="Party branding changed. Sign in again to open the active party's candidate portal."
+        return redirect(url_for("candidate_access"))
 
 @app.errorhandler(SQLAlchemyError)
 def candidate_database_error(exc):
@@ -291,6 +325,8 @@ def api_internal_candidate_registration(national_id):
     normalized=re.sub(r"\D","",str(national_id or ""))
     if not normalized:
         return jsonify({"ok":False,"error":"A valid National ID is required."}),400
+    # Membership changes remain locked if the ID is a candidate for either
+    # party. This endpoint intentionally does not apply the active-party filter.
     candidate=Candidate.query.filter_by(national_id=normalized).first()
     return jsonify({"ok":True,"registered":bool(candidate)})
 
@@ -299,16 +335,18 @@ def require_login():
         return redirect(url_for("login"))
     return None
 
-def portal_state():
-    state=db.session.get(PortalState,1)
+def portal_state(party_code=None):
+    code=normalized_party_code(party_code or active_candidate_party_code())
+    state=PortalState.query.filter_by(party_code=code).first()
     if state is None:
-        state=PortalState(id=1,candidate_list_final=False)
+        state=PortalState(party_code=code,candidate_list_final=False)
         db.session.add(state)
         db.session.commit()
     return state
 
 def candidate_list_is_final():
-    return bool(portal_state().candidate_list_final)
+    code=candidate_session_party_code() if candidate_logged_in() and not logged_in() else active_candidate_party_code()
+    return bool(portal_state(code).candidate_list_final)
 
 def admin_csrf_token():
     token=session.get("admin_csrf_token")
@@ -326,10 +364,11 @@ def candidate_session_national_id():
     return str(session.get("candidate_national_id") or "").strip()
 
 def candidate_can_access(c):
-    return logged_in() or (
+    same_party=normalized_party_code(c.party_code)==(active_candidate_party_code() if logged_in() else candidate_session_party_code())
+    return same_party and (logged_in() or (
         candidate_logged_in() and
         hmac.compare_digest(str(c.national_id or "").strip(),candidate_session_national_id())
-    )
+    ))
 
 def norm(v):
     return re.sub(r"[^a-z0-9]+","_",str(v or "").strip().lower()).strip("_")
@@ -878,8 +917,9 @@ def lookup_membership(national_id):
     return None
 
 
-def existing_candidate_for_national_id(national_id, exclude_candidate_id=None):
-    q=Candidate.query.filter_by(national_id=str(national_id).strip())
+def existing_candidate_for_national_id(national_id, exclude_candidate_id=None, party_code=None):
+    code=normalized_party_code(party_code or (candidate_session_party_code() if candidate_logged_in() else active_candidate_party_code()))
+    q=Candidate.query.filter_by(national_id=str(national_id).strip(),party_code=code)
     if exclude_candidate_id is not None:
         q=q.filter(Candidate.id != exclude_candidate_id)
     return q.first()
@@ -888,6 +928,7 @@ def candidate_dict(c):
     return {
       "id":c.id,
       "candidate_id":c.candidate_id,
+      "party_code":normalized_party_code(c.party_code),
       "full_name":c.full_name,
       "national_id":c.national_id or "",
       "phone":c.phone or "",
@@ -961,10 +1002,12 @@ def render_candidate_form_page(candidate=None, **context):
 @app.get("/main-dashboard")
 @app.get("/navigation")
 def main_navigation_dashboard():
+    party_code=active_candidate_party_code()
+    candidate_entry="uda_candidate_register" if party_code=="UDA" else "odm_candidate_register"
     services=[
         {"group":"Registration & Lookup","title":"Membership Registration","description":"Register a new member or open an existing membership record.","url":service_url(VOTING_SYSTEM_BASE_URL,"membership"),"icon":"MEM"},
         {"group":"Registration & Lookup","title":"Official ODM Membership Registration","description":"Open the official ODM membership website to register through ODM Membership.","url":OFFICIAL_ODM_MEMBERSHIP_URL,"icon":"ODM","external":True},
-        {"group":"Registration & Lookup","title":"Candidate Registration","description":"Start a candidate application or access an existing application.","url":url_for("candidate_register"),"icon":"CAN"},
+        {"group":"Registration & Lookup","title":party_code+" Candidate Registration","description":"Start a candidate application or access an existing "+party_code+" application.","url":url_for(candidate_entry),"icon":"CAN"},
         {"group":"Polling Terminals","title":"ID to Serial Number Lookup","description":"Sign in to the polling-station lookup terminal and retrieve a voter serial number.","url":service_url(VOTING_SYSTEM_BASE_URL,"id-serial-lookup"),"icon":"ID"},
         {"group":"Registration & Lookup","title":"Membership / Polling Centre Lookup","description":"Use a National ID to find the voter's registered name and polling centre.","url":service_url(VOTING_SYSTEM_BASE_URL,"voter-polling-center-lookup"),"icon":"LOC"},
         {"group":"Polling Terminals","title":"Entrance Verification Terminal","description":"Log in to verify voters before they proceed to vote.","url":service_url(VERIFICATION_SYSTEM_BASE_URL,"login"),"icon":"VER"},
@@ -1017,11 +1060,13 @@ def candidate_access():
     if not member or not registered_phone or not hmac.compare_digest(registered_phone,phone_key(phone)):
         record_candidate_login_failure(client_key)
         return render_template("candidate_access.html",error="The National ID and phone number do not match the membership record."),403
-    if not existing_candidate_for_national_id(national_id):
+    party_code=active_candidate_party_code()
+    if not existing_candidate_for_national_id(national_id,party_code=party_code):
         return render_template("candidate_access.html",error="No candidate application was found for this National ID. Use New Candidate Registration to submit a new application."),404
     _CANDIDATE_LOGIN_ATTEMPTS.pop(client_key,None)
     session.clear()
     session["candidate_national_id"]=national_id
+    session["candidate_party_code"]=party_code
     session["candidate_member"]={k:(member.get(k,False) if k=="geography_verified" else str(member.get(k,"") or "")) for k in ("national_id","full_name","phone","date_of_birth","gender","email","membership_no","county","constituency","ward","polling_station","polling_station_code","geography_verified")}
     return redirect(url_for("candidate_home"))
 
@@ -1047,7 +1092,8 @@ def candidate_register():
     if not member or not registered_phone or not hmac.compare_digest(registered_phone,phone_key(phone)):
         record_candidate_login_failure(client_key)
         return render_template("candidate_register.html",error="The National ID and phone number do not match the membership record."),403
-    existing=existing_candidate_for_national_id(national_id)
+    party_code=active_candidate_party_code()
+    existing=existing_candidate_for_national_id(national_id,party_code=party_code)
     if existing:
         return render_template("candidate_register.html",error=f"This National ID already has candidate application {existing.candidate_id}. Use View Application Status to open it."),409
     if candidate_list_is_final():
@@ -1055,8 +1101,21 @@ def candidate_register():
     _CANDIDATE_LOGIN_ATTEMPTS.pop(client_key,None)
     session.clear()
     session["candidate_national_id"]=national_id
+    session["candidate_party_code"]=party_code
     session["candidate_member"]={k:(member.get(k,False) if k=="geography_verified" else str(member.get(k,"") or "")) for k in ("national_id","full_name","phone","date_of_birth","gender","email","membership_no","county","constituency","ward","polling_station","polling_station_code","geography_verified")}
     return redirect(url_for("candidate_new"))
+
+@app.get("/odm/candidate/register")
+def odm_candidate_register():
+    if active_candidate_party_code()!="ODM":
+        return render_template("candidate_register.html",error="ODM candidate registration is not active. Ask the administrator to select ODM branding first."),409
+    return redirect(url_for("candidate_register"))
+
+@app.get("/uda/candidate/register")
+def uda_candidate_register():
+    if active_candidate_party_code()!="UDA":
+        return render_template("candidate_register.html",error="UDA candidate registration is not active. Ask the administrator to select UDA branding first."),409
+    return redirect(url_for("candidate_register"))
 
 @app.get("/candidate/logout")
 def candidate_logout():
@@ -1089,7 +1148,8 @@ def dashboard():
         "ward":request.args.get("ward","").strip()[:160],
         "position":request.args.get("position","").strip()[:40],
     }
-    query=Candidate.query.filter(Candidate.approval_status!="not_submitted")
+    party_code=active_candidate_party_code()
+    query=Candidate.query.filter(Candidate.approval_status!="not_submitted",Candidate.party_code==party_code)
     for field in ("county","constituency","ward","position"):
         value=selected_filters[field]
         if value:
@@ -1097,7 +1157,7 @@ def dashboard():
     candidates=query.order_by(Candidate.position,Candidate.county,Candidate.constituency,Candidate.ward,Candidate.full_name).all()
     state=portal_state()
     return render_template(
-        "dashboard.html",candidates=candidates,positions=POSITIONS,state=state,
+        "dashboard.html",candidates=candidates,positions=POSITIONS,state=state,active_party_code=party_code,
         hierarchy=hierarchy_payload(),selected_filters=selected_filters,
         pdf_documents=PDF_DOCUMENTS,governor_pdf_document=GOVERNOR_PDF_DOCUMENT,
         plwd_pdf_document=PLWD_PDF_DOCUMENT,
@@ -1170,6 +1230,8 @@ def candidate_decision(candidate_id):
         session["candidate_admin_error"]="The candidate list is FINAL. Application decisions cannot be changed until a Level 2 administrator unlocks it."
         return return_to_filtered_dashboard()
     c=Candidate.query.get_or_404(candidate_id)
+    if normalized_party_code(c.party_code)!=active_candidate_party_code():
+        abort(404)
     decision=request.form.get("approval_status","").strip().lower()
     if decision not in {"pending","approved","rejected"}:
         abort(400)
@@ -1278,7 +1340,7 @@ def candidate_new():
     if not logged_in() and not candidate_logged_in():
         return redirect(url_for("candidate_register"))
     if candidate_logged_in() and not logged_in():
-        existing=existing_candidate_for_national_id(candidate_session_national_id())
+        existing=existing_candidate_for_national_id(candidate_session_national_id(),party_code=candidate_session_party_code())
         if existing:
             if request.method=="POST" and existing.approval_status=="not_submitted":
                 return save_candidate(existing)
@@ -1404,12 +1466,13 @@ def save_candidate(c):
         # until PostgreSQL assigns the numeric primary key.
         c=Candidate(
             candidate_id="PENDING-"+uuid.uuid4().hex,
+            party_code=candidate_session_party_code(),
             full_name=name,
             position=position
         )
         db.session.add(c)
         db.session.flush()
-        c.candidate_id=f"CAND-{c.id:06d}"
+        c.candidate_id=f"{normalized_party_code(c.party_code)}-CAND-{c.id:06d}"
 
     national_id=f.get("national_id","").strip()
     if candidate_logged_in() and not logged_in() and not hmac.compare_digest(national_id,candidate_session_national_id()):
@@ -1417,7 +1480,7 @@ def save_candidate(c):
     if not national_id:
         return render_candidate_form_page(c,error="National ID is required and must be verified against Kobo Membership Registration.")
 
-    duplicate=existing_candidate_for_national_id(national_id, c.id if c else None)
+    duplicate=existing_candidate_for_national_id(national_id, c.id if c else None,party_code=normalized_party_code(c.party_code))
     if duplicate:
         area=(
             "National" if duplicate.position=="president"
@@ -1579,10 +1642,13 @@ def candidate_document(candidate_id,document_key):
 
 @app.get("/api/candidates")
 def api_candidates():
+    party_code=normalized_party_code(request.args.get("party_code") or active_candidate_party_code())
+    if party_code!=active_candidate_party_code():
+        return jsonify({"ok":False,"error":"The requested party is not currently active."}),409
     county=request.args.get("county","")
     constituency=request.args.get("constituency","")
     ward=request.args.get("ward","")
-    rows=(Candidate.query.filter_by(status="active",approval_status="approved")
+    rows=(Candidate.query.filter_by(status="active",approval_status="approved",party_code=party_code)
           .filter(Candidate.photo.isnot(None),Candidate.photo_validated.is_(True)).all())
     out=[]
     for c in rows:
@@ -1599,14 +1665,17 @@ def api_candidates():
         if allowed:
             out.append(candidate_dict(c))
     out.sort(key=lambda x:(x["position"],x["full_name"]))
-    return jsonify({"results":out})
+    return jsonify({"party_code":party_code,"results":out})
 
 @app.get("/api/candidates/<position>")
 def api_candidates_position(position):
+    party_code=normalized_party_code(request.args.get("party_code") or active_candidate_party_code())
+    if party_code!=active_candidate_party_code():
+        return jsonify({"ok":False,"error":"The requested party is not currently active."}),409
     county=request.args.get("county","")
     constituency=request.args.get("constituency","")
     ward=request.args.get("ward","")
-    rows=(Candidate.query.filter_by(position=position,status="active",approval_status="approved")
+    rows=(Candidate.query.filter_by(position=position,status="active",approval_status="approved",party_code=party_code)
           .filter(Candidate.photo.isnot(None),Candidate.photo_validated.is_(True)).all())
     out=[]
     scope=position_scope(position)
@@ -1617,7 +1686,7 @@ def api_candidates_position(position):
                  (scope=="ward" and norm(c.county)==norm(county) and norm(c.constituency)==norm(constituency) and norm(c.ward)==norm(ward)))
         if allowed: out.append(candidate_dict(c))
     out.sort(key=lambda x:x["full_name"])
-    return jsonify({"position":position,"results":out})
+    return jsonify({"party_code":party_code,"position":position,"results":out})
 
 if __name__=="__main__":
     app.run(host="0.0.0.0",port=int(os.getenv("PORT","5000")))
