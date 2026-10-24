@@ -38,7 +38,17 @@
 {% for c in candidates %}
 <tr>
 <td>{% if c.photo %}<img class=thumb src="/candidate-photo/{{c.id}}">{% else %}<span class=muted>No photo</span>{% endif %}</td>
-<td><b>{{c.full_name}}</b><br><span class=muted>{{c.candidate_id}}</span><br><span class=muted>PLWD: {{'YES' if c.living_with_disability else 'NO'}}</span><br><span class=muted>Recently resigned public officer: {{'YES' if c.public_officer_recently_resigned else 'NO'}}</span><br><span class=muted>Declared bankrupt: {{'YES' if c.ever_declared_bankrupt else 'NO'}}</span><br><span class=muted>Sentence decision appealed: {{'YES' if c.sentence_decision_appealed else 'NO'}}</span><br><span class=muted>Chapter Six conviction appealed: {{'YES' if c.chapter_six_conviction_appealed else 'NO'}}</span></td>
+<td><b>{{c.full_name}}</b><br><span class=muted>{{c.candidate_id}}</span>
+<details class="candidate-declarations-dropdown">
+ <summary>YES/NO Selections</summary>
+ <dl>
+  <div><dt>PLWD</dt><dd>{{'YES' if c.living_with_disability else 'NO'}}</dd></div>
+  <div><dt>Recently resigned public officer</dt><dd>{{'YES' if c.public_officer_recently_resigned else 'NO'}}</dd></div>
+  <div><dt>Declared bankrupt</dt><dd>{{'YES' if c.ever_declared_bankrupt else 'NO'}}</dd></div>
+  <div><dt>Sentence decision appealed</dt><dd>{{'YES' if c.sentence_decision_appealed else 'NO'}}</dd></div>
+  <div><dt>Chapter Six conviction appealed</dt><dd>{{'YES' if c.chapter_six_conviction_appealed else 'NO'}}</dd></div>
+ </dl>
+</details></td>
 <td>{{c.application_date or "Not recorded"}}</td>
 <td><b>{{c.membership_no or "—"}}</b></td>
 <td>{{c.position|upper}}</td>
