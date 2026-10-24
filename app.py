@@ -1041,6 +1041,7 @@ def public_candidate_applicants():
         query=Candidate.query.filter(
             Candidate.party_code==selected["party_code"],
             Candidate.position!="president",
+            Candidate.approval_status!="rejected",
             Candidate.photo.isnot(None),
         )
         query=query.filter(or_(
