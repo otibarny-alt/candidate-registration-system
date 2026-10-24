@@ -10,7 +10,7 @@ import psycopg
 from psycopg.rows import dict_row
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response, abort
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import inspect, text, func
+from sqlalchemy import inspect, text, func, or_
 from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.security import check_password_hash
 from pypdf import PdfReader
@@ -1008,6 +1008,7 @@ def main_navigation_dashboard():
         {"group":"Registration & Lookup","title":"Membership Registration","description":"Register a new member or open an existing membership record.","url":service_url(VOTING_SYSTEM_BASE_URL,"membership"),"icon":"MEM"},
         {"group":"Registration & Lookup","title":"Official ODM Membership Registration","description":"Open the official ODM membership website to register through ODM Membership.","url":OFFICIAL_ODM_MEMBERSHIP_URL,"icon":"ODM","external":True},
         {"group":"Registration & Lookup","title":party_code+" Candidate Registration","description":"Start a candidate application or access an existing "+party_code+" application.","url":url_for(candidate_entry),"icon":"CAN"},
+        {"group":"Registration & Lookup","title":"Public Candidate Applicants","description":"View applicant names and photographs by party, area and position.","url":url_for("public_candidate_applicants"),"icon":"LIST"},
         {"group":"Polling Terminals","title":"ID to Serial Number Lookup","description":"Sign in to the polling-station lookup terminal and retrieve a voter serial number.","url":service_url(VOTING_SYSTEM_BASE_URL,"id-serial-lookup"),"icon":"ID"},
         {"group":"Registration & Lookup","title":"Membership / Polling Centre Lookup","description":"Use a National ID to find the voter's registered name and polling centre.","url":service_url(VOTING_SYSTEM_BASE_URL,"voter-polling-center-lookup"),"icon":"LOC"},
         {"group":"Polling Terminals","title":"Entrance Verification Terminal","description":"Log in to verify voters before they proceed to vote.","url":service_url(VERIFICATION_SYSTEM_BASE_URL,"login"),"icon":"VER"},
@@ -1022,6 +1023,54 @@ def main_navigation_dashboard():
     for name in ("Registration & Lookup","Polling Terminals","Results Dashboards"):
         groups.append((name,[item for item in services if item["group"]==name]))
     return render_template("main_dashboard.html",groups=groups)
+
+@app.get("/candidate-applicants")
+@app.get("/public/candidate-applicants")
+def public_candidate_applicants():
+    """Public, read-only ballot-style gallery of submitted applications."""
+    selected={
+        "party_code":normalized_party_code(request.args.get("party_code") or active_candidate_party_code()),
+        "county":request.args.get("county","").strip()[:160],
+        "constituency":request.args.get("constituency","").strip()[:160],
+        "ward":request.args.get("ward","").strip()[:160],
+        "position":request.args.get("position","").strip()[:40],
+    }
+    county_selected=bool(selected["county"])
+    candidates=[]
+    if county_selected:
+        query=Candidate.query.filter(
+            Candidate.party_code==selected["party_code"],
+            Candidate.status=="active",
+            Candidate.approval_status.in_(("pending","approved","rejected")),
+            Candidate.photo.isnot(None),
+            Candidate.photo_validated.is_(True),
+        )
+        query=query.filter(or_(
+            Candidate.position=="president",
+            func.lower(Candidate.county)==selected["county"].lower(),
+        ))
+        if selected["constituency"]:
+            query=query.filter(or_(
+                Candidate.position.in_(("president","governor","senator","woman_rep")),
+                func.lower(Candidate.constituency)==selected["constituency"].lower(),
+            ))
+        if selected["ward"]:
+            query=query.filter(or_(
+                Candidate.position.in_(("president","governor","senator","woman_rep","mna")),
+                func.lower(Candidate.ward)==selected["ward"].lower(),
+            ))
+        if selected["position"]:
+            query=query.filter(Candidate.position==selected["position"])
+        candidates=query.order_by(Candidate.position,Candidate.full_name).all()
+    return render_template(
+        "public_candidate_applicants.html",
+        candidates=candidates,
+        positions=POSITIONS,
+        position_labels={key:label for key,label,_scope in POSITIONS},
+        hierarchy=hierarchy_payload(),
+        selected_filters=selected,
+        county_selected=county_selected,
+    )
 
 @app.get("/login")
 def login():
