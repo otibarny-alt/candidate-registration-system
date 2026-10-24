@@ -1149,7 +1149,10 @@ def dashboard():
         "position":request.args.get("position","").strip()[:40],
     }
     party_code=active_candidate_party_code()
-    query=Candidate.query.filter(Candidate.approval_status!="not_submitted",Candidate.party_code==party_code)
+    # Show every saved application to administrators, including progressive
+    # drafts that are still missing a photo or required PDFs. The ballot API
+    # remains restricted to approved candidates only.
+    query=Candidate.query.filter(Candidate.party_code==party_code)
     for field in ("county","constituency","ward","position"):
         value=selected_filters[field]
         if value:

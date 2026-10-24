@@ -9,7 +9,7 @@
  <div><label for="filter_position">Position Applied For</label><select id="filter_position" name="position"><option value="">All Positions</option>{% for key,label,scope in positions %}<option value="{{key}}" {% if selected_filters.position==key %}selected{% endif %}>{{label}}</option>{% endfor %}</select></div>
  <div class="candidate-filter-actions"><button type="submit">Apply Filters</button><a class="btn" href="{{url_for('dashboard')}}">Clear Filters</a></div>
 </form>
-<div class="filter-result-count"><b>{{candidates|length}}</b> candidate application(s) shown{% if selected_filters.county or selected_filters.constituency or selected_filters.ward or selected_filters.position %} for the selected filters{% endif %}.</div>
+<div class="filter-result-count"><b>{{candidates|length}}</b> candidate application(s), including incomplete drafts, shown{% if selected_filters.county or selected_filters.constituency or selected_filters.ward or selected_filters.position %} for the selected filters{% endif %}.</div>
 {% if state.candidate_list_final %}
 <section class="central-lock central-lock-final">
  <h3>🔒 FINAL CANDIDATE LIST — ALL EDITING LOCKED</h3>
