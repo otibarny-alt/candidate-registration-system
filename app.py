@@ -1040,10 +1040,7 @@ def public_candidate_applicants():
     if county_selected:
         query=Candidate.query.filter(
             Candidate.party_code==selected["party_code"],
-            Candidate.status=="active",
-            Candidate.approval_status.in_(("pending","approved","rejected")),
             Candidate.photo.isnot(None),
-            Candidate.photo_validated.is_(True),
         )
         query=query.filter(or_(
             Candidate.position=="president",
