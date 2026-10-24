@@ -1149,19 +1149,25 @@ def dashboard():
         "position":request.args.get("position","").strip()[:40],
     }
     party_code=active_candidate_party_code()
-    # Show every saved application to administrators, including progressive
-    # drafts that are still missing a photo or required PDFs. The ballot API
-    # remains restricted to approved candidates only.
-    query=Candidate.query.filter(Candidate.party_code==party_code)
-    for field in ("county","constituency","ward","position"):
-        value=selected_filters[field]
-        if value:
-            query=query.filter(func.lower(getattr(Candidate,field))==value.lower())
-    candidates=query.order_by(Candidate.position,Candidate.county,Candidate.constituency,Candidate.ward,Candidate.full_name).all()
+    # Candidate volumes can be very large. Never issue or display a nationwide
+    # candidate query: an administrator must select a county first. Lower-level
+    # filters may then narrow that county's saved applications, including drafts.
+    county_selected=bool(selected_filters["county"])
+    candidates=[]
+    if county_selected:
+        query=Candidate.query.filter(
+            Candidate.party_code==party_code,
+            func.lower(Candidate.county)==selected_filters["county"].lower(),
+        )
+        for field in ("constituency","ward","position"):
+            value=selected_filters[field]
+            if value:
+                query=query.filter(func.lower(getattr(Candidate,field))==value.lower())
+        candidates=query.order_by(Candidate.position,Candidate.constituency,Candidate.ward,Candidate.full_name).all()
     state=portal_state()
     return render_template(
         "dashboard.html",candidates=candidates,positions=POSITIONS,state=state,active_party_code=party_code,
-        hierarchy=hierarchy_payload(),selected_filters=selected_filters,
+        hierarchy=hierarchy_payload(),selected_filters=selected_filters,county_selected=county_selected,
         pdf_documents=PDF_DOCUMENTS,governor_pdf_document=GOVERNOR_PDF_DOCUMENT,
         plwd_pdf_document=PLWD_PDF_DOCUMENT,
         public_officer_pdf_document=PUBLIC_OFFICER_PDF_DOCUMENT,
