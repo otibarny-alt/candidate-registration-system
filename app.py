@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 import psycopg
 from psycopg.rows import dict_row
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response, abort
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response, abort, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect, text, func, or_
 from sqlalchemy.exc import SQLAlchemyError
@@ -1068,6 +1068,14 @@ def public_candidate_applicants():
         selected_filters=selected,
         county_selected=county_selected,
     )
+
+@app.get("/candidate-applicants/banner/<party_code>")
+def public_candidate_applicant_banner(party_code):
+    """Serve the filter-selected banner without the global brand rewriter."""
+    filename="brand_uda_header.png" if normalized_party_code(party_code)=="UDA" else "odm_orange_voting_banner.png"
+    response=send_from_directory(app.static_folder,filename,max_age=3600)
+    response.headers["X-Content-Type-Options"]="nosniff"
+    return response
 
 @app.get("/login")
 def login():
