@@ -1408,8 +1408,9 @@ def save_candidate(c):
             missing_documents=candidate_missing_documents(c)
             complete=bool(c.photo and c.photo_validated and not missing_documents)
             c.approval_status="pending" if complete else "not_submitted"
-            if c.approval_status=="pending" and not c.application_date:
-                c.application_date=datetime.now(timezone.utc).isoformat(timespec="seconds")
+            # Record every successful applicant save, whether it is the first
+            # application submission or a later amendment to a saved draft.
+            c.application_date=datetime.now(timezone.utc).isoformat(timespec="seconds")
             if candidate_list_is_final():
                 db.session.rollback()
                 return render_candidate_form_page(c,error="The candidate list became FINAL while this update was open. Your documents were not saved."),423
@@ -1458,6 +1459,7 @@ def save_candidate(c):
             c.approval_status="not_submitted"
             c.rejection_reason=None
             c.rejection_reasons=None
+        c.application_date=datetime.now(timezone.utc).isoformat(timespec="seconds")
         db.session.commit()
         return redirect(url_for("candidate_edit",candidate_id=c.id,saved=1))
 
@@ -1586,6 +1588,7 @@ def save_candidate(c):
     if is_new:
         # Persist a private draft before image validation. It is not visible to
         # administrators and cannot enter a ballot while not_submitted.
+        c.application_date=datetime.now(timezone.utc).isoformat(timespec="seconds")
         db.session.commit()
 
     cropped_photo=f.get("cropped_photo","").strip()
@@ -1602,8 +1605,6 @@ def save_candidate(c):
     missing_documents=candidate_missing_documents(c)
     if c.photo and c.photo_validated and not missing_documents:
         c.approval_status="pending"
-        if not c.application_date:
-            c.application_date=datetime.now(timezone.utc).isoformat(timespec="seconds")
     else:
         c.approval_status="not_submitted"
 
@@ -1619,6 +1620,7 @@ def save_candidate(c):
     if candidate_list_is_final():
         db.session.rollback()
         return render_candidate_form_page(c,error="The candidate list became FINAL while this form was open. Your changes were not saved."),423
+    c.application_date=datetime.now(timezone.utc).isoformat(timespec="seconds")
     db.session.commit()
     if logged_in():
         return redirect(url_for("dashboard"))
