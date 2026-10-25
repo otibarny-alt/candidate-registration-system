@@ -1,6 +1,6 @@
 
 # V1.32: candidate photos may use a plain background of any colour.
-import os, csv, re, uuid, base64, hmac, time, json
+import os, csv, re, uuid, base64, hmac, time, json, secrets
 from datetime import datetime, timezone
 from io import BytesIO, StringIO
 import requests
@@ -1028,6 +1028,8 @@ def main_navigation_dashboard():
 @app.get("/public/candidate-applicants")
 def public_candidate_applicants():
     """Public, read-only ballot-style gallery of submitted applications."""
+    if not session.get("public_gallery_voter_id"):
+        return redirect(url_for("public_candidate_applicants_login",next=request.full_path))
     selected={
         "party_code":normalized_party_code(request.args.get("party_code") or active_candidate_party_code()),
         "county":request.args.get("county","").strip()[:160],
@@ -1069,7 +1071,59 @@ def public_candidate_applicants():
         hierarchy=hierarchy_payload(),
         selected_filters=selected,
         county_selected=county_selected,
+        gallery_voter_name=session.get("public_gallery_voter_name",""),
+        gallery_logout_csrf=session.setdefault("public_gallery_logout_csrf",secrets.token_urlsafe(24)),
     )
+
+@app.route("/candidate-applicants/login",methods=["GET","POST"])
+def public_candidate_applicants_login():
+    if session.get("public_gallery_voter_id"):
+        return redirect(url_for("public_candidate_applicants"))
+    token=session.get("public_gallery_login_csrf") or secrets.token_urlsafe(24)
+    session["public_gallery_login_csrf"]=token
+    next_url=(request.values.get("next") or "").strip()
+    if not next_url.startswith("/candidate-applicants") and not next_url.startswith("/public/candidate-applicants"):
+        next_url=url_for("public_candidate_applicants")
+    error=None
+    if request.method=="POST":
+        supplied=request.form.get("csrf_token","")
+        client_key="public-gallery:"+request.headers.get("X-Forwarded-For",request.remote_addr or "").split(",")[0].strip()
+        national_id=request.form.get("national_id","").strip()
+        phone=request.form.get("phone","").strip()
+        if not supplied or not hmac.compare_digest(supplied,token):
+            error="Security token expired. Reload the page and try again."
+        elif candidate_login_rate_limited(client_key):
+            error="Too many unsuccessful attempts. Please wait 15 minutes before trying again."
+        elif not national_id.isdigit() or not phone_key(phone):
+            record_candidate_login_failure(client_key)
+            error="Enter a valid National ID and registered phone number."
+        else:
+            try:
+                member=lookup_membership(national_id)
+                registered_phone=phone_key((member or {}).get("phone",""))
+                if not member or not registered_phone or not hmac.compare_digest(registered_phone,phone_key(phone)):
+                    record_candidate_login_failure(client_key)
+                    error="The National ID and phone number do not match an active registered voter."
+                else:
+                    _CANDIDATE_LOGIN_ATTEMPTS.pop(client_key,None)
+                    session["public_gallery_voter_id"]=national_id
+                    session["public_gallery_voter_name"]=str(member.get("full_name") or "Registered Voter").strip()
+                    session.pop("public_gallery_login_csrf",None)
+                    return redirect(next_url)
+            except Exception:
+                app.logger.exception("Public candidate gallery voter login failed")
+                error="The voters register could not be checked. Please try again."
+    return render_template("public_candidate_applicants_login.html",error=error,csrf_token=token,next_url=next_url)
+
+@app.post("/candidate-applicants/logout")
+def public_candidate_applicants_logout():
+    supplied=request.form.get("csrf_token","")
+    expected=session.get("public_gallery_logout_csrf","")
+    if not supplied or not expected or not hmac.compare_digest(supplied,expected):
+        abort(400)
+    for key in ("public_gallery_voter_id","public_gallery_voter_name","public_gallery_logout_csrf"):
+        session.pop(key,None)
+    return redirect(url_for("public_candidate_applicants_login"))
 
 @app.get("/candidate-applicants/banner/<party_code>")
 def public_candidate_applicant_banner(party_code):

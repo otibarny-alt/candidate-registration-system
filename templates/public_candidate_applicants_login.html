@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Candidate Applicants — Registered Voter Login</title><link rel="stylesheet" href="{{url_for('static',filename='style.css')}}"></head>
+<body><main class="public-gallery-login-shell">
+ <section class="public-gallery-login-card">
+  <img class="candidate-portal-banner" src="{{party_brand.header_url or url_for('static',filename='odm_orange_voting_banner.png')}}" alt="{{party_brand.abbreviation}} nominations banner">
+  <h1>Registered Voter Login</h1>
+  <p>Enter the National ID and phone number recorded in the voters register to view candidate applicants.</p>
+  {% if error %}<div class="error">{{error}}</div>{% endif %}
+  <form method="post" action="{{url_for('public_candidate_applicants_login')}}" autocomplete="off">
+   <input type="hidden" name="csrf_token" value="{{csrf_token}}"><input type="hidden" name="next" value="{{next_url}}">
+   <label for="national_id">National ID</label><input id="national_id" name="national_id" inputmode="numeric" pattern="[0-9]+" autocomplete="off" data-lpignore="true" data-1p-ignore="true" required autofocus>
+   <label for="phone">Registered Phone Number</label><input id="phone" name="phone" type="tel" inputmode="tel" autocomplete="off" data-lpignore="true" data-1p-ignore="true" required>
+   <button type="submit">Login to View Applicants</button>
+  </form>
+  <a class="public-gallery-back-link" href="{{url_for('main_navigation_dashboard')}}">← Back to Main Navigation</a>
+ </section>
+</main></body></html>

@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Public Candidate Applicants</title><link rel="stylesheet" href="{{url_for('static',filename='style.css')}}"></head>
 <body><main class="public-applicant-shell">
-<nav class="public-applicant-nav"><a href="{{url_for('main_navigation_dashboard')}}">← Back to Main Navigation</a></nav>
+<nav class="public-applicant-nav"><a href="{{url_for('main_navigation_dashboard')}}">← Back to Main Navigation</a><span class="public-gallery-voter">Signed in: {{gallery_voter_name}}</span><form method="post" action="{{url_for('public_candidate_applicants_logout')}}"><input type="hidden" name="csrf_token" value="{{gallery_logout_csrf}}"><button type="submit">Voter Logout</button></form></nav>
 <header class="public-applicant-head"><img class="public-applicant-banner" src="{{url_for('public_candidate_applicant_banner',party_code=selected_filters.party_code)}}" alt="{{selected_filters.party_code}} nominations banner"><h1>Candidate Applicants</h1><p>Public register of applicant names and passport photographs.</p></header>
 <form method="get" action="{{url_for('public_candidate_applicants')}}" class="public-applicant-filters">
 <div><label for="party_code">Party</label><select id="party_code" name="party_code" required><option value="ODM" {% if selected_filters.party_code=='ODM' %}selected{% endif %}>ODM</option><option value="UDA" {% if selected_filters.party_code=='UDA' %}selected{% endif %}>UDA</option></select></div>
